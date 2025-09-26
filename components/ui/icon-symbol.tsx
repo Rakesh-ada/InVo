@@ -31,6 +31,8 @@ const MAPPING = {
   'barcode.viewfinder': 'qr-code-scanner',
   'chevron.left': 'chevron-left',
   'shippingbox.fill': 'inventory',
+  'plus': 'add',
+  'trash': 'delete',
 } as IconMapping;
 
 /**

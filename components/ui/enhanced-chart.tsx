@@ -173,7 +173,7 @@ export function EnhancedChart({
                 cx={point.x}
                 cy={point.y}
                 r={8}
-                fill="#000000"
+                fill="#054cbeff"
                 stroke="#FFFFFF"
                 strokeWidth={2}
                 onPress={() => handlePointPress(index)}
@@ -183,21 +183,7 @@ export function EnhancedChart({
         ))}
       </Svg>
       
-      {/* Tooltip for selected point */}
-      {selectedIndex !== undefined && (
-        <View style={[
-          styles.tooltip,
-          {
-            left: Math.max(10, Math.min(chartWidth - 70, points[selectedIndex].x - 35)),
-            top: points[selectedIndex].y - 50,
-            transform: [{ translateY: -15 }] // Move tooltip higher up
-          }
-        ]}>
-          <ThemedText style={styles.tooltipText}>
-            {formatCurrency(data[selectedIndex].value)}
-          </ThemedText>
-        </View>
-      )}
+      {/* No tooltip */}
       
       {/* Day labels */}
       <View style={styles.labelsContainer}>
@@ -229,28 +215,7 @@ const styles = StyleSheet.create({
     marginVertical: 15,
     backgroundColor: 'transparent',
   },
-  tooltip: {
-    position: 'absolute',
-    backgroundColor: '#000000',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-    minWidth: 70,
-    zIndex: 10,
-  },
-  tooltipText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
+
   labelsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -22,7 +22,7 @@ export default function DashboardScreen() {
           <View style={styles.header}>
             <ThemedText type="title" style={styles.headerTitle} lightColor="#000000" darkColor="#FFFFFF">Dashboard</ThemedText>
             <TouchableOpacity style={styles.notificationButton}>
-              <IconSymbol name="bell.fill" size={20} color="#3b82f6" />
+              <IconSymbol name="bell.fill" size={20} color="#ECEDEE" />
               <View style={styles.notificationBadge}>
                 <ThemedText adjustsFontSizeToFit numberOfLines={1} style={styles.badgeText}>2</ThemedText>
               </View>

@@ -74,7 +74,7 @@ export default function TabLayout() {
           title: 'Explore',
           tabBarIcon: ({ color }) => (
             <Image
-              source={require('@/assets/images/explore.png')}
+              source={require('@/assets/images/cart.png')}
               style={{ width: 30, height: 30, tintColor: color }}
               resizeMode="contain"
             />

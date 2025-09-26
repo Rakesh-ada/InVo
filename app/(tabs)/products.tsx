@@ -1,4 +1,5 @@
 import { ThemedText } from '@/components/themed-text';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import React, { useCallback, useState } from 'react';
 import { FlatList, Image, SafeAreaView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -34,7 +35,7 @@ type ProductRowProps = {
 
 const ROW_HEIGHT = 64;
 const SEPARATOR_HEIGHT = 4;
-const VISIBLE_ITEMS = 6;
+const VISIBLE_ITEMS = 5;
 
 function ProductRow({ icon, name, up, down, tint = '#FFFFFF', onMeasure }: ProductRowProps) {
   return (
@@ -79,8 +80,12 @@ export default function ProductsScreen() {
         <View style={styles.header}>
           <ThemedText type="title">Products</ThemedText>
           <View style={styles.headerActions}>
-            <View style={styles.headerCircle} />
-            <View style={[styles.headerCircle, { marginLeft: 12 }]} />
+            <TouchableOpacity style={styles.headerButton} onPress={() => alert('Add new product')}>
+              <IconSymbol name="plus" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.headerButton}>
+              <IconSymbol name="magnifyingglass" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -126,7 +131,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 20,
   },
   header: {
     flexDirection: 'row',
@@ -140,12 +145,33 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
   },
-  headerCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  headerButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: '#2A2A2A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  addButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#3b82f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
   },
   statsRow: {
     flexDirection: 'row',
@@ -187,12 +213,14 @@ const styles = StyleSheet.create({
   sectionTitle: {
     marginTop: 12,
     marginBottom: 8,
+    marginLeft: 10,
   },
   listWrap: {
-    flex: 1,
+    height: 300, 
+    marginLeft: 5,
+    marginRight: 5,
   },
   list: {
-    flex: 1,
     backgroundColor: '#1F1F1F',
     borderRadius: 16,
     paddingHorizontal: 8,
