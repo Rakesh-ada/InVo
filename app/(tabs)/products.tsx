@@ -1,289 +1,247 @@
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { CategoryItem } from '@/components/ui/category-item';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { MetricCard } from '@/components/ui/metric-card';
-import { Link } from 'expo-router';
-import React, { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
-import { TouchableOpacity } from 'react-native-gesture-handler';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Colors } from '@/constants/theme';
+import React, { useCallback, useState } from 'react';
+import { FlatList, Image, SafeAreaView, StyleSheet, TouchableOpacity, View } from 'react-native';
+
+type StatProps = {
+  label: string;
+  value: string;
+  deltaLabel: string;
+  deltaColor: string;
+};
+
+function StatCard({ label, value, deltaLabel, deltaColor }: StatProps) {
+  return (
+    <View style={styles.statCard}>
+      <ThemedText style={styles.statLabel} darkColor="#9BA1A6">{label}</ThemedText>
+      <ThemedText style={styles.statValue} type="title">{value}</ThemedText>
+      <View style={[styles.deltaPill, { backgroundColor: `${deltaColor}22` }]}> 
+        <View style={[styles.deltaDot, { backgroundColor: deltaColor }]} />
+        <ThemedText style={[styles.deltaText]} darkColor={deltaColor}>{deltaLabel}</ThemedText>
+      </View>
+    </View>
+  );
+}
+
+type ProductRowProps = {
+  icon: any;
+  name: string;
+  up: number;
+  down: number;
+  tint?: string;
+  onMeasure?: (height: number) => void;
+};
+
+const ROW_HEIGHT = 64;
+const SEPARATOR_HEIGHT = 4;
+const VISIBLE_ITEMS = 6;
+
+function ProductRow({ icon, name, up, down, tint = '#FFFFFF', onMeasure }: ProductRowProps) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      style={styles.row}
+      onLayout={(e) => {
+        if (onMeasure) onMeasure(e.nativeEvent.layout.height);
+      }}
+    >
+      <View style={styles.rowLeft}>
+        <View style={styles.rowIconWrap}>
+          <Image source={icon} style={[styles.rowIcon, { tintColor: tint }]} resizeMode="contain" />
+        </View>
+        <View>
+          <ThemedText style={styles.rowTitle}>{name}</ThemedText>
+          <View style={styles.rowStats}>
+            <ThemedText darkColor="#22C55E">▲ {up}</ThemedText>
+            <ThemedText darkColor="#EF4444" style={{ marginLeft: 12 }}>▼ {down}</ThemedText>
+          </View>
+        </View>
+      </View>
+      <ThemedText darkColor="#9BA1A6">›</ThemedText>
+    </TouchableOpacity>
+  );
+}
 
 export default function ProductsScreen() {
-  const [activeTab, setActiveTab] = useState<'list' | 'stock'>('list');
+  const isDark = true;
+  const bg = Colors.dark.background;
+  const [measuredRowHeight, setMeasuredRowHeight] = useState<number | null>(null);
+  const onMeasureRow = useCallback((h: number) => {
+    if (!measuredRowHeight && h > 0) setMeasuredRowHeight(h);
+  }, [measuredRowHeight]);
+  const listHeight = measuredRowHeight
+    ? measuredRowHeight * VISIBLE_ITEMS + SEPARATOR_HEIGHT * (VISIBLE_ITEMS - 1) + 8
+    : ROW_HEIGHT * VISIBLE_ITEMS + SEPARATOR_HEIGHT * (VISIBLE_ITEMS - 1) + 8;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={styles.scrollView}>
-        <ThemedView style={styles.container}>
-          <View style={styles.header}>
-            <ThemedText type="title" style={styles.headerTitle} lightColor="#000000" darkColor="#FFFFFF">Products</ThemedText>
-            <View style={styles.headerActions}>
-              <TouchableOpacity style={styles.iconButton}>
-                <IconSymbol name="square.and.pencil" size={22} color="#3b82f6" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.iconButton}>
-                <IconSymbol name="magnifyingglass" size={22} color="#3b82f6" />
-              </TouchableOpacity>
-            </View>
+    <SafeAreaView style={[styles.safe, { backgroundColor: bg }]}> 
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <ThemedText type="title">Products</ThemedText>
+          <View style={styles.headerActions}>
+            <View style={styles.headerCircle} />
+            <View style={[styles.headerCircle, { marginLeft: 12 }]} />
           </View>
+        </View>
 
-          <View style={styles.tabContainer}>
-            <TouchableOpacity 
-              style={[styles.tab, activeTab === 'list' ? styles.activeTab : undefined]} 
-              onPress={() => setActiveTab('list')}>
-              <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                <IconSymbol 
-                  name="list.bullet" 
-                  size={16} 
-                  color={activeTab === 'list' ? 'white' : '#9BA1A6'} 
-                  style={{marginRight: 6}} 
+        <View style={styles.statsRow}>
+          <StatCard label="Total Products" value="128" deltaLabel="+8.00%" deltaColor="#22C55E" />
+          <StatCard label="Stock in Hand" value="2,350" deltaLabel="+2.34%" deltaColor="#38BDF8" />
+        </View>
+
+        <ThemedText style={styles.sectionTitle} darkColor="#9BA1A6">Products list</ThemedText>
+
+        <View style={styles.listWrap}>
+          <View style={[styles.list, { height: listHeight }]}> 
+            <FlatList
+              data={PRODUCTS}
+              keyExtractor={(item) => item.name}
+              renderItem={({ item, index }) => (
+                <ProductRow
+                  icon={item.icon}
+                  name={item.name}
+                  up={item.up}
+                  down={item.down}
+                  onMeasure={index === 0 && !measuredRowHeight ? onMeasureRow : undefined}
                 />
-                <ThemedText style={[styles.tabText, activeTab === 'list' ? styles.activeTabText : undefined]}>
-                  Products list
-                </ThemedText>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.tab, activeTab === 'stock' ? styles.activeTab : undefined]} 
-              onPress={() => setActiveTab('stock')}>
-              <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                <IconSymbol 
-                  name="shippingbox.fill" 
-                  size={16} 
-                  color={activeTab === 'stock' ? 'white' : '#9BA1A6'} 
-                  style={{marginRight: 6}} 
-                />
-                <ThemedText style={[styles.tabText, activeTab === 'stock' ? styles.activeTabText : undefined]}>
-                  Stock In Hand
-                </ThemedText>
-              </View>
-            </TouchableOpacity>
+              )}
+              ItemSeparatorComponent={() => <View style={{ height: 4 }} />}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingVertical: 4 }}
+              style={{ flexGrow: 0, height: listHeight }}
+              getItemLayout={measuredRowHeight ? ((_, index) => ({ length: measuredRowHeight, offset: (measuredRowHeight + SEPARATOR_HEIGHT) * index, index })) : undefined}
+              initialNumToRender={VISIBLE_ITEMS}
+            />
           </View>
-
-          <View style={styles.metricsContainer}>
-            <View style={styles.metricRow}>
-              <MetricCard 
-                title="Total Products" 
-                value="128" 
-                backgroundColor="#1A1A1A" 
-                textColor="#ECEDEE"
-                icon="cube.fill"
-                percentChange={18.0}
-              />
-              <MetricCard 
-                title="Stock in Hand" 
-                value="2,350" 
-                backgroundColor="#1A1A1A" 
-                textColor="#ECEDEE"
-                icon="shippingbox.fill"
-                percentChange={2.34}
-              />
-            </View>
-          </View>
-
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <View style={[styles.statDot, { backgroundColor: '#10b981' }]} />
-              <ThemedText style={styles.statText}>+18.00% from last week</ThemedText>
-            </View>
-            <View style={styles.statItem}>
-              <View style={[styles.statDot, { backgroundColor: '#3b82f6' }]} />
-              <ThemedText style={styles.statText}>+2.34% from last month</ThemedText>
-            </View>
-          </View>
-          
-          <ThemedText style={styles.sectionTitle}>Products list</ThemedText>
-          
-          <ThemedView style={styles.productList}>
-            <CategoryItem 
-              title="Vegetables"
-              iconBgColor="#e8f5e9"
-              iconComponent={<IconSymbol name="leaf.fill" size={20} color="green" />}
-              upCount={267}
-              downCount={143}
-            />
-            
-            <CategoryItem 
-              title="Sweet Food"
-              iconBgColor="#fce4ec"
-              iconComponent={<IconSymbol name="birthday.cake.fill" size={20} color="#d81b60" />}
-              upCount={124}
-              downCount={87}
-            />
-            
-            <CategoryItem 
-              title="Snack"
-              iconBgColor="#fff3e0"
-              iconComponent={<IconSymbol name="popcorn.fill" size={20} color="#ff9800" />}
-              upCount={58}
-              downCount={37}
-            />
-            
-            <CategoryItem 
-              title="Fruits"
-              iconBgColor="#f1f8e9"
-              iconComponent={<IconSymbol name="leaf.fill" size={20} color="#7cb342" />}
-              upCount={450}
-              downCount={234}
-            />
-          </ThemedView>
-
-          <Link href="/scan-product" asChild>
-            <TouchableOpacity style={styles.scanButton}>
-              <View style={styles.scanButtonIconContainer}>
-                <IconSymbol name="barcode.viewfinder" size={24} color="#ffffff" />
-              </View>
-              <ThemedText style={styles.scanButtonText}>Scan Products</ThemedText>
-            </TouchableOpacity>
-          </Link>
-        </ThemedView>
-      </ScrollView>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  safe: {
     flex: 1,
-    backgroundColor: '#121212',
-  },
-  scrollView: {
-    flex: 1,
-    backgroundColor: '#121212',
   },
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: '#121212',
-    paddingTop: 10,
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
-    marginTop: 8,
-  },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    opacity: 1,
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    marginTop: 43,
+    marginLeft: 5,
+    marginRight: 5,
   },
   headerActions: {
     flexDirection: 'row',
-    gap: 12,
-  },
-  iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#1A1A1A',
     alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
   },
-  tabContainer: {
-    flexDirection: 'row',
-    marginBottom: 20,
-    backgroundColor: '#1A1A1A',
-    borderRadius: 12,
-    padding: 4,
-    marginTop: 5,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  activeTab: {
-    backgroundColor: '#3b82f6',
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#9BA1A6',
-  },
-  activeTabText: {
-    color: 'white',
-    fontWeight: '600',
-  },
-  metricsContainer: {
-    marginBottom: 24,
-    marginTop: 8,
-  },
-  metricRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 16,
+  headerCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#2A2A2A',
   },
   statsRow: {
     flexDirection: 'row',
-    marginBottom: 28,
-    marginTop: 8,
-    backgroundColor: '#1A1A1A',
-    borderRadius: 12,
-    padding: 12,
+    gap: 12,
+    marginBottom: 12,
   },
-  statItem: {
+  statCard: {
+    flex: 1,
+    backgroundColor: '#1F1F1F',
+    borderRadius: 16,
+    padding: 16,
+  },
+  statLabel: {
+    fontSize: 14,
+    marginBottom: 4,
+    opacity: 0.8,
+  },
+  statValue: {
+    marginBottom: 8,
+  },
+  deltaPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 16,
-    flex: 1,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
   },
-  statDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 8,
+  deltaDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
   },
-  statText: {
+  deltaText: {
+    fontWeight: '600',
     fontSize: 12,
-    color: '#9BA1A6',
-    flexShrink: 1,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 16,
-    color: '#ECEDEE',
+    marginTop: 12,
+    marginBottom: 8,
   },
-  productList: {
+  listWrap: {
+    flex: 1,
+  },
+  list: {
+    flex: 1,
+    backgroundColor: '#1F1F1F',
     borderRadius: 16,
-    marginBottom: 24,
-    backgroundColor: 'transparent',
+    paddingHorizontal: 8,
   },
-  scanButton: {
+  row: {
     flexDirection: 'row',
-    backgroundColor: '#3b82f6',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+  },
+  rowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  rowIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#2A2A2A',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 16,
-    marginBottom: 24,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 5,
-  },
-  scanButtonIconContainer: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 8,
-    padding: 6,
     marginRight: 12,
   },
-  scanButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
+  rowIcon: {
+    width: 24,
+    height: 24,
+  },
+  rowTitle: {
+    fontWeight: '700',
+    fontSize: 18,
+    marginBottom: 2,
+  },
+  rowStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });
+
+const PRODUCTS = [
+  { icon: require('@/assets/images/partial-react-logo.png'), name: 'Vegetables', up: 267, down: 149 },
+  { icon: require('@/assets/images/partial-react-logo.png'), name: 'Sweet Food', up: 124, down: 87 },
+  { icon: require('@/assets/images/partial-react-logo.png'), name: 'Snack', up: 88, down: 27 },
+  { icon: require('@/assets/images/partial-react-logo.png'), name: 'Fruits', up: 450, down: 234 },
+  { icon: require('@/assets/images/partial-react-logo.png'), name: 'Bakery', up: 98, down: 15 },
+  { icon: require('@/assets/images/partial-react-logo.png'), name: 'Dairy', up: 210, down: 64 },
+  { icon: require('@/assets/images/partial-react-logo.png'), name: 'Beverages', up: 132, down: 40 },
+  { icon: require('@/assets/images/partial-react-logo.png'), name: 'Frozen', up: 76, down: 22 },
+];
+
+

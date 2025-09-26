@@ -1,5 +1,4 @@
-
-// Force the app to use light mode to match our new design
+// Force the app to use dark mode app-wide
 export function useColorScheme(): 'light' | 'dark' {
-  return 'light';
+  return 'dark';
 }
