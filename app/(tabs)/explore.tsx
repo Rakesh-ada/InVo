@@ -1,7 +1,7 @@
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useMemo, useState } from 'react';
-import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type CatalogItem = { id: string; name: string; price: number };
@@ -169,9 +169,16 @@ export default function ExploreScreen() {
         )}
 
         <SectionHeader title="" />
-        <View style={[styles.cartBox, cart.length === 0 ? styles.cartBoxEmpty : styles.cartBoxFilled]}>
+        <View style={[styles.cartBox, styles.cartBoxFilled]}>
           {cart.length === 0 ? (
-            <ThemedText darkColor="#9BA1A6">Cart is empty</ThemedText>
+            <View style={styles.emptyCartContainer}>
+              <Image 
+                source={require('@/assets/images/empty.png')} 
+                style={styles.emptyCartGif} 
+                resizeMode="contain"
+              />
+              <ThemedText style={styles.emptyCartText}>Your cart is empty</ThemedText>
+            </View>
           ) : (
             <FlatList
               data={cart}
@@ -224,7 +231,7 @@ const styles = StyleSheet.create({
   suggestionChip: { backgroundColor: '#1A1A1A', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
   cartBox: { backgroundColor: '#1A1A1A', borderRadius: 14, padding: 12, flex: 1, borderWidth: 1, borderColor: '#232323' },
   cartBoxFilled: { backgroundColor: '#1A1A1A', borderRadius: 14, padding: 12, minHeight: 140, maxHeight: 380, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3, borderWidth: 1, borderColor: '#232323' },
-  cartBoxEmpty: { backgroundColor: 'transparent', borderRadius: 0, padding: 0, flexGrow: 0 },
+  cartBoxEmpty: { backgroundColor: '#1A1A1A', borderRadius: 14, padding: 12, minHeight: 140, maxHeight: 380, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#232323' },
   cartRow: { flexDirection: 'row', alignItems: 'center' },
   qtyWrap: { flexDirection: 'row', alignItems: 'center' },
   qtyBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#232323', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#2F2F2F' },
@@ -235,6 +242,9 @@ const styles = StyleSheet.create({
   totalValue: { fontWeight: '800', fontSize: 18 },
   proceed: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#3b82f6', paddingVertical: 16, borderRadius: 14, marginTop: 12, gap: 8, opacity: 1 },
   proceedText: { color: '#FFFFFF', fontWeight: '700' },
+  emptyCartContainer: { alignItems: 'center', justifyContent: 'center', flex: 1, padding: 20 },
+  emptyCartGif: { width: 180, height: 180, marginBottom: 16, tintColor: '#718096' },
+  emptyCartText: { color: '#9BA1A6', fontSize: 16, fontWeight: '500' },
 });
 
 // Minimal design tokens for consistent spacing/colors

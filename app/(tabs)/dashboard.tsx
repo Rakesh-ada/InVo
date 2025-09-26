@@ -268,15 +268,15 @@ const styles = StyleSheet.create({
   percentChangeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#d1fae5',
+    backgroundColor: '#2b7e0a58', 
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 12,
+    borderRadius: 10,
   },
   percentChangeText: {
-    fontSize: 13,
+    fontSize: 16,
     color: '#10b981',
-    fontWeight: '600',
+    fontWeight: '700',
   },
   chartContainer: {
     marginTop: 16,
