@@ -1,60 +1,70 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Dimensions, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 import { ThemedText } from '../themed-text';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-// Real revenue data for the last 7 days
-const revenueData = [
-  { day: 'Mo', value: 19500, comparisonValue: 14400, date: '2025-09-20' },
-  { day: 'Tu', value: 22300, comparisonValue: 16200, date: '2025-09-21' },
-  { day: 'We', value: 19800, comparisonValue: 18900, date: '2025-09-22' },
-  { day: 'Th', value: 24500, comparisonValue: 20700, date: '2025-09-23' },
-  { day: 'Fr', value: 22000, comparisonValue: 22673, date: '2025-09-24' },
-  { day: 'Sa', value: 24500, comparisonValue: 23100, date: '2025-09-25' },
-  { day: 'Su', value: 24500, comparisonValue: 21500, date: '2025-09-26' },
-];
+export type ChartDataPoint = {
+  day: string;
+  value: number;
+  comparisonValue: number;
+  date: string;
+};
+
+export type TimeFilter = '1D' | '1W' | '1M' | '3M' | '6M' | '1Y';
 
 type EnhancedChartProps = {
-  data?: typeof revenueData;
+  data?: ChartDataPoint[];
   height?: number;
   activeIndex?: number;
   onPointPress?: (index: number, value: number) => void;
   showComparison?: boolean;
+  timeFilter?: TimeFilter;
+  isLoading?: boolean;
 };
 
 export function EnhancedChart({
-  data = revenueData,
-  height = 300, // Increased default height
-  activeIndex = 5, // Default to Saturday as in reference image
+  data = [],
+  height = 300,
+  activeIndex = 0,
   onPointPress,
   showComparison = true,
+  timeFilter = '1W',
+  isLoading = false,
 }: EnhancedChartProps) {
   const [selectedIndex, setSelectedIndex] = useState(activeIndex);
-  const chartWidth = screenWidth - 40; // Reduced padding for more space
-  const padding = 5; // Smaller padding for better chart utilization
+  const chartWidth = screenWidth - 40;
+  const padding = 5;
   const chartInnerWidth = chartWidth - (padding * 2);
-  const chartInnerHeight = height - 60; // More space for bottom labels
-  
+  const chartInnerHeight = height - 60;
+
+  // Generate chart data based on time filter
+  const chartData = useMemo(() => {
+    if (isLoading || !data || data.length === 0) {
+      return generateEmptyData(timeFilter);
+    }
+    return data;
+  }, [data, timeFilter, isLoading]);
+
   // Get all values from both datasets for scaling
-  const allValues = data.flatMap(d => [d.value, d.comparisonValue || 0]);
+  const allValues = chartData.flatMap(d => [d.value, d.comparisonValue || 0]);
   const maxValue = Math.max(...allValues);
-  const minValue = Math.min(...allValues) * 0.85; // Add some bottom margin
+  const minValue = Math.min(...allValues) * 0.85;
   const valueRange = maxValue - minValue;
 
   // Main data points
-  const points = data.map((item, index) => {
-    const x = padding + (index / (data.length - 1)) * chartInnerWidth;
-    const normalizedValue = (item.value - minValue) / valueRange;
+  const points = chartData.map((item, index) => {
+    const x = padding + (index / Math.max(chartData.length - 1, 1)) * chartInnerWidth;
+    const normalizedValue = (item.value - minValue) / Math.max(valueRange, 1);
     const y = height - 50 - (normalizedValue * chartInnerHeight);
     return { x, y, value: item.value, day: item.day };
   });
   
   // Comparison data points (usually previous period)
-  const comparisonPoints = data.map((item, index) => {
-    const x = padding + (index / (data.length - 1)) * chartInnerWidth;
-    const normalizedValue = ((item.comparisonValue || 0) - minValue) / valueRange;
+  const comparisonPoints = chartData.map((item, index) => {
+    const x = padding + (index / Math.max(chartData.length - 1, 1)) * chartInnerWidth;
+    const normalizedValue = ((item.comparisonValue || 0) - minValue) / Math.max(valueRange, 1);
     const y = height - 50 - (normalizedValue * chartInnerHeight);
     return { x, y, value: item.comparisonValue || 0, day: item.day };
   });
@@ -99,8 +109,8 @@ export function EnhancedChart({
 
   const handlePointPress = (index: number) => {
     setSelectedIndex(index);
-    if (onPointPress) {
-      onPointPress(index, data[index].value);
+    if (onPointPress && chartData[index]) {
+      onPointPress(index, chartData[index].value);
     }
   };
 
@@ -187,7 +197,7 @@ export function EnhancedChart({
       
       {/* Day labels */}
       <View style={styles.labelsContainer}>
-        {data.map((item, index) => (
+        {chartData.map((item, index) => (
           <TouchableOpacity 
             key={index} 
             style={[
@@ -244,3 +254,90 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
+
+// Helper function to generate empty data for different time periods
+function generateEmptyData(timeFilter: TimeFilter): ChartDataPoint[] {
+  const now = new Date();
+  
+  switch (timeFilter) {
+    case '1D':
+      return generateHourlyData(now);
+    case '1W':
+      return generateWeeklyData(now);
+    case '1M':
+      return generateMonthlyData(now, 1);
+    case '3M':
+      return generateMonthlyData(now, 3);
+    case '6M':
+      return generateMonthlyData(now, 6);
+    case '1Y':
+      return generateYearlyData(now);
+    default:
+      return generateWeeklyData(now);
+  }
+}
+
+function generateHourlyData(now: Date): ChartDataPoint[] {
+  const data: ChartDataPoint[] = [];
+  for (let i = 0; i < 24; i++) {
+    const hour = new Date(now);
+    hour.setHours(i, 0, 0, 0);
+    data.push({
+      day: hour.getHours().toString().padStart(2, '0'),
+      value: 0,
+      comparisonValue: 0,
+      date: hour.toISOString().split('T')[0],
+    });
+  }
+  return data;
+}
+
+function generateWeeklyData(now: Date): ChartDataPoint[] {
+  const days = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+  const data: ChartDataPoint[] = [];
+  
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(now);
+    day.setDate(day.getDate() - (6 - i));
+    data.push({
+      day: days[i],
+      value: 0,
+      comparisonValue: 0,
+      date: day.toISOString().split('T')[0],
+    });
+  }
+  return data;
+}
+
+function generateMonthlyData(now: Date, months: number): ChartDataPoint[] {
+  const data: ChartDataPoint[] = [];
+  const points = Math.min(months * 4, 12); // Max 12 points for readability
+  
+  for (let i = 0; i < points; i++) {
+    const date = new Date(now);
+    date.setMonth(date.getMonth() - (points - 1 - i));
+    data.push({
+      day: `${date.getMonth() + 1}/${date.getDate()}`,
+      value: 0,
+      comparisonValue: 0,
+      date: date.toISOString().split('T')[0],
+    });
+  }
+  return data;
+}
+
+function generateYearlyData(now: Date): ChartDataPoint[] {
+  const data: ChartDataPoint[] = [];
+  
+  for (let i = 0; i < 12; i++) {
+    const month = new Date(now);
+    month.setMonth(month.getMonth() - (11 - i));
+    data.push({
+      day: month.toLocaleDateString('en-US', { month: 'short' }),
+      value: 0,
+      comparisonValue: 0,
+      date: month.toISOString().split('T')[0],
+    });
+  }
+  return data;
+}

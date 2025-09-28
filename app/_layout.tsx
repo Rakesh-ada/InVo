@@ -34,7 +34,12 @@ export default function RootLayout() {
       <ThemeProvider value={customDarkTheme}>
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+          <Stack.Screen name="product-detail" options={{ 
+            title: 'Product Details',
+            headerStyle: { backgroundColor: '#121212' },
+            headerTintColor: '#FFFFFF',
+            headerTitleStyle: { color: '#FFFFFF' }
+          }} />
         </Stack>
         <StatusBar style="light" />
       </ThemeProvider>

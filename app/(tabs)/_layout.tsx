@@ -22,11 +22,11 @@ export default function TabLayout() {
         tabBarStyle: {
           position: 'absolute',
           left: horizontal,
-          right: horizontal,
           bottom: 25,
           height: 64,
-          width: tabWidth,
-          marginLeft:21,
+          width: 'auto',
+          marginLeft: 15,
+          marginRight: 15,
           borderRadius: 24,
           backgroundColor:
             colorScheme === 'dark'
