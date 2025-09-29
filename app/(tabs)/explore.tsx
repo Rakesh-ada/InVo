@@ -4,7 +4,7 @@ import { Product as DBProduct, dbService } from '@/services/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, Image, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Image, Modal, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type CartItem = { id: string; name: string; qty: number; price: number };
@@ -57,6 +57,8 @@ export default function ExploreScreen() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [products, setProducts] = useState<DBProduct[]>([]);
   const [isSearchActive, setIsSearchActive] = useState(false);
+  const [isPaymentModalVisible, setIsPaymentModalVisible] = useState(false);
+  const [settings, setSettings] = useState<{qrPaymentImageUri?: string; businessName?: string}>({});
 
   // Save cart to AsyncStorage
   const saveCartToStorage = useCallback(async (cartData: CartItem[]) => {
@@ -90,13 +92,29 @@ export default function ExploreScreen() {
     }
   }, []);
 
+  const loadSettings = useCallback(async () => {
+    try {
+      const savedSettings = await AsyncStorage.getItem('@invo_settings');
+      if (savedSettings) {
+        const parsedSettings = JSON.parse(savedSettings);
+        setSettings({
+          qrPaymentImageUri: parsedSettings.qrPaymentImageUri,
+          businessName: parsedSettings.businessName
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to load settings', e);
+    }
+  }, []);
+
   useEffect(() => {
     const initializeData = async () => {
       await loadProducts();
       await loadCartFromStorage();
+      await loadSettings();
     };
     initializeData();
-  }, [loadProducts, loadCartFromStorage]);
+  }, [loadProducts, loadCartFromStorage, loadSettings]);
 
   useFocusEffect(
     useCallback(() => {
@@ -111,7 +129,10 @@ export default function ExploreScreen() {
   }, [query, products]);
 
   const addToCart = (product: DBProduct) => {
-    if (!product || product.quantity <= 0) return;
+    if (!product || product.quantity <= 0) {
+      Alert.alert('Out of Stock', `${product.name} is currently out of stock.`);
+      return;
+    }
     
     setCart(prev => {
       const existing = prev.find(c => c.id === product.id);
@@ -121,6 +142,11 @@ export default function ExploreScreen() {
         if (existing.qty < product.quantity) {
           newCart = prev.map(c => c.id === product.id ? { ...c, qty: c.qty + 1 } : c);
         } else {
+          // Show alert when trying to exceed available stock
+          Alert.alert(
+            'Stock Limit Reached', 
+            `You can only add up to ${product.quantity} ${product.name}(s). Only ${product.quantity} available in stock.`
+          );
           newCart = prev; // Don't add if would exceed inventory
         }
       } else {
@@ -149,12 +175,20 @@ export default function ExploreScreen() {
     const product = products.find(p => p.id === id);
     const cartItem = cart.find(c => c.id === id);
     
-    if (product && cartItem && cartItem.qty < product.quantity) {
-      setCart(prev => {
-        const newCart = prev.map(c => c.id === id ? { ...c, qty: c.qty + 1 } : c);
-        saveCartToStorage(newCart);
-        return newCart;
-      });
+    if (product && cartItem) {
+      if (cartItem.qty < product.quantity) {
+        setCart(prev => {
+          const newCart = prev.map(c => c.id === id ? { ...c, qty: c.qty + 1 } : c);
+          saveCartToStorage(newCart);
+          return newCart;
+        });
+      } else {
+        // Show alert when trying to exceed available stock
+        Alert.alert(
+          'Stock Limit Reached', 
+          `You can only add up to ${product.quantity} ${product.name}(s). Only ${product.quantity} available in stock.`
+        );
+      }
     }
   };
 
@@ -169,8 +203,96 @@ export default function ExploreScreen() {
   const total = useMemo(() => cart.reduce((sum, c) => sum + c.qty * c.price, 0), [cart]);
 
   const proceed = () => {
-    setCart([]);
-    saveCartToStorage([]);
+    if (cart.length === 0) return;
+    setIsPaymentModalVisible(true);
+  };
+
+  const handlePaymentComplete = async () => {
+    try {
+      // Validate inventory before processing payment
+      const inventoryErrors = [];
+      for (const cartItem of cart) {
+        const product = products.find(p => p.id === cartItem.id);
+        if (product && cartItem.qty > product.quantity) {
+          inventoryErrors.push(`${product.name}: Only ${product.quantity} available, but ${cartItem.qty} requested`);
+        }
+      }
+
+      if (inventoryErrors.length > 0) {
+        Alert.alert(
+          'Inventory Error', 
+          `Some items are no longer available in the requested quantities:\n\n${inventoryErrors.join('\n')}\n\nPlease update your cart and try again.`
+        );
+        return;
+      }
+
+      // Update inventory - reduce quantities for sold items and record sales
+      for (const cartItem of cart) {
+        const product = products.find(p => p.id === cartItem.id);
+        if (product) {
+          const newQuantity = product.quantity - cartItem.qty;
+          
+          // Update product quantity
+          await dbService.updateProduct({
+            ...product,
+            quantity: newQuantity
+          });
+          
+          // Record the sale
+          await dbService.recordSale(
+            cartItem.id,
+            cartItem.qty,
+            cartItem.qty * cartItem.price
+          );
+          
+          console.log(`Updated ${product.name}: ${product.quantity} → ${newQuantity} (sold ${cartItem.qty})`);
+        }
+      }
+
+      // Save daily sales data for dashboard tracking
+      const dailySalesEntry = {
+        id: Date.now().toString(),
+        totalAmount: total,
+        quantitySold: cart.reduce((sum, item) => sum + item.qty, 0),
+        saleDate: new Date().toISOString(),
+        items: cart.map(item => ({
+          productId: item.id,
+          productName: item.name,
+          quantity: item.qty,
+          price: item.price,
+          total: item.qty * item.price
+        }))
+      };
+
+      try {
+        const existingDailySales = await AsyncStorage.getItem('@daily_sales_data');
+        const dailySales = existingDailySales ? JSON.parse(existingDailySales) : [];
+        dailySales.push(dailySalesEntry);
+        await AsyncStorage.setItem('@daily_sales_data', JSON.stringify(dailySales));
+      } catch (error) {
+        console.warn('Failed to save daily sales data:', error);
+      }
+
+      // Clear cart
+      setCart([]);
+      saveCartToStorage([]);
+      setIsPaymentModalVisible(false);
+      
+      // Reload products to reflect inventory changes
+      await loadProducts();
+      
+      Alert.alert(
+        'Payment Successful!', 
+        `Payment completed successfully!\n\nTotal: ₹${total.toFixed(2)}\nItems sold: ${cart.length}\n\nInventory has been updated.`
+      );
+    } catch (error) {
+      console.error('Failed to update inventory:', error);
+      Alert.alert('Error', 'Failed to process payment. Please try again.');
+    }
+  };
+
+  const handlePaymentCancel = () => {
+    setIsPaymentModalVisible(false);
   };
 
   const toggleSearch = () => {
@@ -192,42 +314,55 @@ export default function ExploreScreen() {
 
 
 
-  const CartItemRow = ({ item }: { item: CartItem }) => (
-    <View style={styles.cartRow}>
-      <View style={styles.itemInfo}>
-        <View style={styles.itemHeader}>
-          <ThemedText style={styles.itemName}>{item.name}</ThemedText>
-          <ThemedText style={styles.itemTotal}>₹{(item.qty * item.price).toFixed(2)}</ThemedText>
-        </View>
-        <View style={styles.itemDetails}>
-          <ThemedText style={styles.itemPrice}>₹{item.price.toFixed(2)} each</ThemedText>
-          <View style={styles.qtyWrap}>
-            <TouchableOpacity
-              style={styles.qtyBtn}
-              onPress={() => decrement(item.id)}
-              accessibilityRole="button"
-              accessibilityLabel={`Decrease ${item.name}`}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <IconSymbol name="minus" size={16} color="#FFFFFF" />
-            </TouchableOpacity>
-            <View style={styles.qtyDisplay}>
-              <ThemedText style={styles.qtyText}>{item.qty}</ThemedText>
+  const CartItemRow = ({ item }: { item: CartItem }) => {
+    const product = products.find(p => p.id === item.id);
+    const isAtMaxStock = product && item.qty >= product.quantity;
+    
+    return (
+      <View style={styles.cartRow}>
+        <View style={styles.itemInfo}>
+          <View style={styles.itemHeader}>
+            <ThemedText style={styles.itemName}>{item.name}</ThemedText>
+            <ThemedText style={styles.itemTotal}>₹{(item.qty * item.price).toFixed(2)}</ThemedText>
+          </View>
+          <View style={styles.itemDetails}>
+            <View style={styles.itemPriceInfo}>
+              <ThemedText style={styles.itemPrice}>₹{item.price.toFixed(2)} each</ThemedText>
+              {product && (
+                <ThemedText style={styles.stockInfo}>
+                  Stock: {product.quantity - item.qty} remaining
+                </ThemedText>
+              )}
             </View>
-            <TouchableOpacity
-              style={styles.qtyBtn}
-              onPress={() => increment(item.id)}
-              accessibilityRole="button"
-              accessibilityLabel={`Increase ${item.name}`}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <IconSymbol name="plus" size={16} color="#FFFFFF" />
-            </TouchableOpacity>
+            <View style={styles.qtyWrap}>
+              <TouchableOpacity
+                style={styles.qtyBtn}
+                onPress={() => decrement(item.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Decrease ${item.name}`}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <IconSymbol name="minus" size={16} color="#FFFFFF" />
+              </TouchableOpacity>
+              <View style={styles.qtyDisplay}>
+                <ThemedText style={styles.qtyText}>{item.qty}</ThemedText>
+              </View>
+              <TouchableOpacity
+                style={[styles.qtyBtn, isAtMaxStock && styles.qtyBtnDisabled]}
+                onPress={() => increment(item.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Increase ${item.name}`}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                disabled={isAtMaxStock}
+              >
+                <IconSymbol name="plus" size={16} color={isAtMaxStock ? "#6B7280" : "#FFFFFF"} />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -308,7 +443,7 @@ export default function ExploreScreen() {
                 renderItem={({ item }) => (
                   <CartItemRow item={item} />
                 )}
-                ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+                ItemSeparatorComponent={() => <View style={{ height: 5 }} />}
               />
             )}
           </View>
@@ -333,6 +468,76 @@ export default function ExploreScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Payment Modal */}
+      <Modal
+        visible={isPaymentModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handlePaymentCancel}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.paymentModal}>
+            <View style={styles.paymentHeader}>
+              <ThemedText style={styles.paymentTitle}>Payment</ThemedText>
+              <TouchableOpacity onPress={handlePaymentCancel} style={styles.closeButton}>
+                <IconSymbol name="xmark" size={20} color="#9BA1A6" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.paymentContent}>
+              <ThemedText style={styles.paymentInstruction}>
+                Scan QR code to pay ₹{total.toFixed(2)}
+              </ThemedText>
+              
+              <View style={styles.qrCodeContainer}>
+                {settings.qrPaymentImageUri ? (
+                  <Image 
+                    source={{ uri: settings.qrPaymentImageUri }} 
+                    style={styles.qrCodeImage} 
+                    resizeMode="contain" 
+                  />
+                ) : (
+                  <View style={styles.qrCodePlaceholder}>
+                    <IconSymbol name="qrcode" size={48} color="#9BA1A6" />
+                    <ThemedText style={styles.qrCodePlaceholderText}>
+                      No QR Code
+                    </ThemedText>
+                    <ThemedText style={styles.qrCodePlaceholderSubtext}>
+                      Add in Settings
+                    </ThemedText>
+                  </View>
+                )}
+              </View>
+              
+              <View style={styles.paymentSummary}>
+                <View style={styles.paymentTotal}>
+                  <ThemedText style={styles.paymentTotalLabel}>Total:</ThemedText>
+                  <ThemedText style={styles.paymentTotalAmount}>₹{total.toFixed(2)}</ThemedText>
+                </View>
+              </View>
+            </View>
+            
+            <View style={styles.paymentActions}>
+              <TouchableOpacity 
+                style={styles.cancelButton} 
+                onPress={handlePaymentCancel}
+              >
+                <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.completeButton} 
+                onPress={handlePaymentComplete}
+                disabled={!settings.qrPaymentImageUri}
+              >
+                <IconSymbol name="checkmark" size={20} color="#FFFFFF" />
+                <ThemedText style={styles.completeButtonText}>Done</ThemedText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -343,7 +548,7 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   bottomSection: { 
     paddingTop: 16,
-    paddingBottom: 150,
+    paddingBottom: 100,
     backgroundColor: '#121212',
     borderTopWidth: 1,
     borderTopColor: '#2A2A2A',
@@ -432,7 +637,7 @@ const styles = StyleSheet.create({
   section: { marginVertical: 10, fontWeight: '700' },
   suggestionBar: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 10 },
   suggestionChip: { backgroundColor: '#1A1A1A', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
-  cartBox: { backgroundColor: 'transparent', borderRadius: 14, padding: 12, flex: 1, borderWidth: 0, borderColor: 'transparent', shadowOpacity: 0, elevation: 0 },
+  cartBox: { backgroundColor: 'transparent', borderRadius: 14, padding: 12, paddingBottom:0, flex: 1, borderWidth: 0, borderColor: 'transparent', shadowOpacity: 0, elevation: 0 },
   cartBoxFilled: { backgroundColor: 'transparent', borderRadius: 14, padding: 12, minHeight: 140, maxHeight: 380, shadowColor: 'transparent', shadowOpacity: 0, shadowRadius: 0, shadowOffset: { width: 0, height: 0 }, elevation: 0, borderWidth: 0, borderColor: 'transparent' },
   cartBoxEmpty: { backgroundColor: 'transparent', borderRadius: 14, padding: 12, minHeight: 140, maxHeight: 380, alignItems: 'center', justifyContent: 'center', borderWidth: 0, borderColor: 'transparent', shadowOpacity: 0, elevation: 0 },
   cartRow: { 
@@ -507,10 +712,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  itemPriceInfo: {
+    flex: 1,
+  },
   itemPrice: {
     fontSize: 14,
     color: '#9BA1A6',
     fontWeight: '500',
+  },
+  stockInfo: {
+    fontSize: 12,
+    color: '#3B82F6',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  qtyBtnDisabled: {
+    opacity: 0.5,
+    borderColor: '#6B7280',
   },
   totalRow: { 
     flexDirection: 'row', 
@@ -555,6 +773,166 @@ const styles = StyleSheet.create({
     fontSize: 18, 
     fontWeight: '600',
     textAlign: 'center',
+  },
+  // Payment Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  paymentModal: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 24,
+    width: '100%',
+    maxWidth: 380,
+    maxHeight: '85%',
+    borderWidth: 1,
+    borderColor: '#333333',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  paymentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+  },
+  paymentTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#2A2A2A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#404040',
+  },
+  paymentContent: {
+    padding: 24,
+    paddingTop: 20,
+  },
+  paymentInstruction: {
+    fontSize: 18,
+    color: '#E5E5E5',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 24,
+    fontWeight: '500',
+  },
+  qrCodeContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  qrCodeImage: {
+    width: 220,
+    height: 220,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    padding: 8,
+  },
+  qrCodePlaceholder: {
+    width: 220,
+    height: 220,
+    borderRadius: 16,
+    backgroundColor: '#2A2A2A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#3B82F6',
+    borderStyle: 'dashed',
+  },
+  qrCodePlaceholderText: {
+    fontSize: 18,
+    color: '#9BA1A6',
+    marginTop: 12,
+    fontWeight: '600',
+  },
+  qrCodePlaceholderSubtext: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  paymentSummary: {
+    backgroundColor: '#2A2A2A',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#333333',
+  },
+  paymentTotal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  paymentTotalLabel: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+  },
+  paymentTotalAmount: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#22C55E',
+    letterSpacing: -0.3,
+  },
+  paymentActions: {
+    flexDirection: 'row',
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 32,
+    gap: 16,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: '#2A2A2A',
+    borderRadius: 16,
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#404040',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#9BA1A6',
+  },
+  completeButton: {
+    flex: 1,
+    backgroundColor: '#22C55E',
+    borderRadius: 16,
+    paddingVertical: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#22C55E',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  completeButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
   },
 });
 

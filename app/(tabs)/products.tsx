@@ -70,7 +70,9 @@ function ProductRow({ product, onMeasure, onPress }: ProductRowProps & { onPress
         <View style={styles.rowContent}>
           <ThemedText style={styles.rowTitle}>{product.name}</ThemedText>
           <View style={styles.rowDetails}>
-            <ThemedText style={styles.rowDetailQuantity}>QTY {product.quantity}</ThemedText>
+            <ThemedText style={[styles.rowDetailQuantity, product.quantity === 0 && styles.outOfStock]}>
+              {product.quantity === 0 ? 'OUT OF STOCK' : `QTY ${product.quantity}`}
+            </ThemedText>
             <ThemedText style={styles.rowDetailPrice}>₹{product.sellingPrice}</ThemedText>
           </View>
         </View>
@@ -193,8 +195,17 @@ export default function ProductsScreen() {
 
   const loadProducts = useCallback(async () => {
     try {
-      await dbService.initDatabase();
+      console.log('Loading products from database...');
+      
+      // Check if database is healthy first
+      const isHealthy = await dbService.checkDatabaseHealth();
+      if (!isHealthy) {
+        console.log('Database not healthy, initializing...');
+        await dbService.initDatabase();
+      }
+      
       const products = await dbService.getProducts();
+      console.log(`Loaded ${products.length} products from database`);
       setProducts(products);
     } catch (e) {
       console.error('Failed to load products', e);
@@ -203,7 +214,7 @@ export default function ProductsScreen() {
       // Show user-friendly error with reset option
       Alert.alert(
         'Database Error',
-        `Failed to initialize database: ${errorMessage}\n\nWould you like to reset the database?`,
+        `Failed to load products: ${errorMessage}\n\nWould you like to reset the database?`,
         [
           { text: 'Cancel', style: 'cancel' },
           { 
@@ -227,17 +238,7 @@ export default function ProductsScreen() {
 
   useEffect(() => {
     loadFormData();
-    loadProducts().then(async () => {
-      // Clear any existing demo products and initialize empty database
-      try {
-        await dbService.clearAllProducts();
-        await dbService.seedInitialData();
-        const freshProducts = await dbService.getProducts();
-        setProducts(freshProducts);
-      } catch (e) {
-        console.warn('Failed to clear demo products and initialize database', e);
-      }
-    });
+    loadProducts();
   }, [loadProducts, loadFormData]);
 
   // Save form data when inputs change
@@ -351,7 +352,32 @@ export default function ProductsScreen() {
     } catch (e) {
       console.error('Failed to add product:', e);
       const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
-      Alert.alert('Error', `Failed to save product: ${errorMessage}`);
+      
+      // Provide more specific error messages
+      if (errorMessage.includes('NullPointerException')) {
+        Alert.alert(
+          'Database Error', 
+          'Database connection lost. Would you like to reset the database?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Reset Database', 
+              style: 'destructive',
+              onPress: async () => {
+                try {
+                  await dbService.resetDatabase();
+                  Alert.alert('Success', 'Database reset successfully! Please try adding the product again.');
+                } catch (resetError) {
+                  console.error('Failed to reset database:', resetError);
+                  Alert.alert('Error', 'Failed to reset database. Please restart the app.');
+                }
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Error', `Failed to save product: ${errorMessage}`);
+      }
     }
   };
 
@@ -699,6 +725,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#3B82F6',
     marginRight: 12,
+  },
+  outOfStock: {
+    color: '#EF4444',
+    fontWeight: '700',
   },
   rowDetailPrice: {
     fontSize: 13,

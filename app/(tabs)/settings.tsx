@@ -1,7 +1,6 @@
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
-import { dbService } from '@/services/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Image, StyleSheet, Switch, TextInput, TouchableOpacity, View } from 'react-native';
@@ -16,6 +15,7 @@ type SettingsData = {
   isDarkMode: boolean;
   autoSync: boolean;
   profileImageUri?: string | null;
+  qrPaymentImageUri?: string | null;
 };
 
 export default function SettingsScreen() {
@@ -25,6 +25,7 @@ export default function SettingsScreen() {
     isDarkMode: true,
     autoSync: false,
     profileImageUri: null,
+    qrPaymentImageUri: null,
   });
 
   useEffect(() => {
@@ -85,49 +86,27 @@ export default function SettingsScreen() {
     }
   }, [updateSetting]);
 
-  const exportData = async () => {
+  const pickQRPaymentImage = useCallback(async () => {
     try {
-      // Get products data via SQLite database
-      await dbService.initDatabase();
-      const products = await dbService.getProducts();
-
-      // Get cart data if available
-      const cartData = await AsyncStorage.getItem('@cart_items');
-      const cart = cartData ? JSON.parse(cartData) : [];
-
-      // Create export data
-      const exportData = {
-        businessName: settings.businessName,
-        exportDate: new Date().toISOString(),
-        products: products,
-        cart: cart,
-        settings: settings,
-      };
-
-      // Save export history
-      const exportHistory = await AsyncStorage.getItem('@export_history');
-      const history = exportHistory ? JSON.parse(exportHistory) : [];
-      const newExport = {
-        id: Date.now().toString(),
-        date: new Date().toISOString(),
-        productCount: products.length,
-        cartItemCount: cart.length,
-      };
-      history.unshift(newExport);
-      await AsyncStorage.setItem('@export_history', JSON.stringify(history.slice(0, 10)));
-
-      // For now, just show the JSON data in an alert
-      // In a real app, you'd implement proper file sharing
-      Alert.alert(
-        'Export Data', 
-        `JSON Report Generated\\n\\nProducts: ${products.length}\\nCart Items: ${cart.length}\\nExport saved to history.`,
-        [{ text: 'OK' }]
-      );
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant photo library access.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1], // Square aspect ratio for QR code
+        quality: 0.9,
+      });
+      if (!result.canceled && result.assets && result.assets[0]) {
+        updateSetting('qrPaymentImageUri', result.assets[0].uri);
+      }
     } catch (e) {
-      console.warn('Export failed:', e);
-      Alert.alert('Export Failed', 'Could not export data');
+      Alert.alert('Error', 'Failed to select QR payment image');
     }
-  };
+  }, [updateSetting]);
+
 
   const bg = Colors.dark.background;
 
@@ -181,6 +160,37 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* Payment Settings */}
+        <View style={styles.section}>
+          <ThemedText style={styles.sectionTitle}>Payment</ThemedText>
+          <View style={styles.settingCard}>
+            <View style={styles.settingRow}>
+              <View style={styles.settingLeft}>
+                <IconSymbol name="qrcode" size={20} color="#FFFFFF" />
+                <ThemedText style={styles.settingLabel}>QR Payment Code</ThemedText>
+              </View>
+              <TouchableOpacity 
+                style={styles.qrImageContainer} 
+                onPress={pickQRPaymentImage}
+                activeOpacity={0.8}
+              >
+                {settings.qrPaymentImageUri ? (
+                  <Image 
+                    source={{ uri: settings.qrPaymentImageUri }} 
+                    style={styles.qrImage} 
+                    resizeMode="cover" 
+                  />
+                ) : (
+                  <View style={styles.qrPlaceholder}>
+                    <IconSymbol name="plus" size={24} color="#9BA1A6" />
+                    <ThemedText style={styles.qrPlaceholderText}>Add QR Code</ThemedText>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
         {/* App Settings */}
         <View style={styles.section}>
           <ThemedText style={styles.sectionTitle}>App Settings</ThemedText>
@@ -200,33 +210,8 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          <View style={styles.settingCard}>
-            <View style={styles.settingRow}>
-              <View style={styles.settingLeft}>
-                <IconSymbol name="arrow.clockwise" size={20} color="#FFFFFF" />
-                <ThemedText style={styles.settingLabel}>Auto Sync</ThemedText>
-              </View>
-              <Switch
-                value={settings.autoSync}
-                onValueChange={(value) => updateSetting('autoSync', value)}
-                trackColor={{ false: '#2A2A2A', true: '#3b82f6' }}
-                thumbColor={settings.autoSync ? '#FFFFFF' : '#9BA1A6'}
-              />
-            </View>
-          </View>
         </View>
 
-        {/* Export Section */}
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Data</ThemedText>
-          <TouchableOpacity style={styles.exportButton} onPress={exportData}>
-            <View style={styles.exportLeft}>
-              <IconSymbol name="square.and.arrow.up" size={20} color="#FFFFFF" />
-              <ThemedText style={styles.exportLabel}>Export JSON Report</ThemedText>
-            </View>
-            <IconSymbol name="chevron.right" size={16} color="#9BA1A6" />
-          </TouchableOpacity>
-        </View>
       </View>
     </SafeAreaView>
   );
@@ -319,22 +304,29 @@ const styles = StyleSheet.create({
     minWidth: 150,
     textAlign: 'right',
   },
-  exportButton: {
-    backgroundColor: '#1F1F1F',
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
+  qrImageContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: '#2A2A2A',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
   },
-  exportLeft: {
-    flexDirection: 'row',
+  qrImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+  },
+  qrPlaceholder: {
     alignItems: 'center',
+    justifyContent: 'center',
+    padding: 4,
   },
-  exportLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 12,
-    color: '#FFFFFF',
+  qrPlaceholderText: {
+    fontSize: 6,
+    color: '#9BA1A6',
+    marginTop: 1,
+    textAlign: 'center',
+    lineHeight: 8,
   },
 });

@@ -1,6 +1,7 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useTabBar } from '@/contexts/TabBarContext';
 import { dbService, Product } from '@/services/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -56,9 +57,12 @@ type DashboardPreferences = {
 };
 
 export default function DashboardScreen() {
+  const { setTabBarVisible } = useTabBar();
   const [products, setProducts] = useState<Product[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [salesData, setSalesData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [preferences, setPreferences] = useState<DashboardPreferences>({
     lastViewedDate: new Date().toISOString(),
     favoriteMetrics: ['totalItems', 'productTypes'],
@@ -67,8 +71,23 @@ export default function DashboardScreen() {
 
   // Calculate real metrics from database
   const totalProductsIn = products.reduce((sum, product) => sum + product.quantity, 0);
-  const totalProductTypes = products.length; // Number of product types
-  const totalRevenue = products.reduce((sum, product) => sum + (product.sellingPrice * product.quantity), 0);
+  const inventoryValue = products.reduce((sum, product) => sum + (product.buyingPrice * product.quantity), 0);
+  
+  // Calculate sales metrics
+  const totalSalesAmount = salesData.reduce((sum, sale) => sum + sale.totalAmount, 0);
+  const totalItemsSold = salesData.reduce((sum, sale) => sum + sale.quantitySold, 0);
+  
+  // Calculate out of stock and low stock items
+  const outOfStockItems = products.filter(product => product.quantity === 0);
+  const lowStockItems = products.filter(product => product.quantity > 0 && product.quantity <= 5);
+  const outOfStockCount = outOfStockItems.length;
+  const lowStockCount = lowStockItems.length;
+  const totalNotificationCount = outOfStockCount + lowStockCount;
+
+  // Keep tab bar visible when notification sidebar is open
+  // useEffect(() => {
+  //   setTabBarVisible(!isNotificationOpen);
+  // }, [isNotificationOpen, setTabBarVisible]);
 
   const loadDashboardData = useCallback(async () => {
     try {
@@ -81,12 +100,19 @@ export default function DashboardScreen() {
       }
       
       // Load products data
-      await dbService.initDatabase();
+      const isHealthy = await dbService.checkDatabaseHealth();
+      if (!isHealthy) {
+        await dbService.initDatabase();
+      }
       const productsData = await dbService.getProducts();
       setProducts(productsData);
       
-      // Generate transactions from products
-      const generatedTransactions = generateTransactionsFromProducts(productsData);
+      // Load sales data
+      const sales = await dbService.getSalesData();
+      setSalesData(sales);
+      
+      // Generate transactions from products and sales
+      const generatedTransactions = generateTransactionsFromProducts(productsData, sales);
       setTransactions(generatedTransactions);
       
       // Save updated preferences
@@ -116,80 +142,175 @@ export default function DashboardScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ThemedView style={styles.container}>
-          <View style={styles.header}>
-            <ThemedText type="title" style={styles.headerTitle} lightColor="#000000" darkColor="#FFFFFF">Dashboard</ThemedText>
-            <TouchableOpacity style={styles.notificationButton}>
-              <Image 
-                source={require('@/assets/images/box.png')} 
-                style={styles.notificationIcon} 
-                resizeMode="contain" 
+    <>
+      <SafeAreaView style={styles.safeArea}>
+        <ThemedView style={styles.container}>
+            <View style={styles.header}>
+              <ThemedText type="title" style={styles.headerTitle} lightColor="#000000" darkColor="#FFFFFF">Dashboard</ThemedText>
+              <TouchableOpacity 
+                style={styles.notificationButton}
+                onPress={() => setIsNotificationOpen(!isNotificationOpen)}
+              >
+                <Image 
+                  source={require('@/assets/images/box.png')} 
+                  style={styles.notificationIcon} 
+                  resizeMode="contain" 
+                />
+                {totalNotificationCount > 0 && (
+                  <View style={styles.notificationBadge}>
+                    <ThemedText adjustsFontSizeToFit numberOfLines={1} style={styles.badgeText}>{totalNotificationCount}</ThemedText>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.statsRow}>
+              <StatCard 
+                label="Items Value" 
+                value={isLoading ? "..." : Math.round(inventoryValue).toLocaleString()} 
+                deltaLabel="" 
+                deltaColor="#3B82F6" 
               />
-              <View style={styles.notificationBadge}>
-                <ThemedText adjustsFontSizeToFit numberOfLines={1} style={styles.badgeText}>{preferences.notificationCount}</ThemedText>
-              </View>
-            </TouchableOpacity>
-          </View>
+              <StatCard 
+                label="Items Sold" 
+                value={isLoading ? "..." : totalItemsSold.toLocaleString()} 
+                deltaLabel="" 
+                deltaColor="#22C55E" 
+              />
+            </View>
 
-          <View style={styles.statsRow}>
-            <StatCard 
-              label="Total Items" 
-              value={isLoading ? "..." : totalProductsIn.toLocaleString()} 
-              deltaLabel="" 
-              deltaColor="#3B82F6" 
-            />
-            <StatCard 
-              label="Product Types" 
-              value={isLoading ? "..." : totalProductTypes.toLocaleString()} 
-              deltaLabel="" 
-              deltaColor="#06B6D4" 
-            />
-          </View>
-
-          <View style={styles.revenueSection}>
-            <ThemedText style={styles.sectionTitle} darkColor="#9BA1A6">Total Inventory Value</ThemedText>
-            <View style={styles.revenueRow}>
-              <View style={styles.revenueValueContainer}>
-                <ThemedText style={styles.currencySymbol}>₹</ThemedText>
-                <ThemedText style={styles.revenueValue}>
-                  {isLoading ? "..." : totalRevenue.toLocaleString('en-US', { 
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2 
-                  })}
-                </ThemedText>
-              </View>
-              <View style={styles.percentChangeContainer}>
-                <ThemedText style={styles.percentChangeText}>
-                  {isLoading ? "..." : `${products.length} items`}
-                </ThemedText>
+            <View style={styles.revenueSection}>
+              <ThemedText style={styles.sectionTitle} darkColor="#9BA1A6">Total Sales Revenue</ThemedText>
+              <View style={styles.revenueRow}>
+                <View style={styles.revenueValueContainer}>
+                  <ThemedText style={styles.currencySymbol}>₹</ThemedText>
+                  <ThemedText style={styles.revenueValue}>
+                    {isLoading ? "..." : totalSalesAmount.toLocaleString('en-US', { 
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2 
+                    })}
+                  </ThemedText>
+                </View>
+                <View style={styles.percentChangeContainer}>
+                  <ThemedText style={styles.percentChangeText}>
+                    {isLoading ? "..." : `${totalItemsSold} sold`}
+                  </ThemedText>
+                </View>
               </View>
             </View>
-          </View>
 
-          <View style={styles.transactionsSection}>
-            <ThemedText style={styles.sectionTitle} darkColor="#9BA1A6">Recent Transactions</ThemedText>
-            <View style={styles.transactionsList}>
-              {isLoading ? (
-                <View style={styles.loadingContainer}>
-                  <ThemedText style={styles.loadingText} darkColor="#9BA1A6">Loading transactions...</ThemedText>
-                </View>
-              ) : transactions.length === 0 ? (
-                <View style={styles.emptyContainer}>
-                  <ThemedText style={styles.emptyText} darkColor="#9BA1A6">No transactions yet</ThemedText>
+            <View style={styles.transactionsSection}>
+              <ThemedText style={styles.sectionTitle} darkColor="#9BA1A6">Recent Activities</ThemedText>
+              <View style={styles.transactionsList}>
+                {isLoading ? (
+                  <View style={styles.loadingContainer}>
+                    <ThemedText style={styles.loadingText} darkColor="#9BA1A6">Loading activities...</ThemedText>
+                  </View>
+                ) : transactions.length === 0 ? (
+                  <View style={styles.emptyContainer}>
+                    <ThemedText style={styles.emptyText} darkColor="#9BA1A6">No activities yet</ThemedText>
+                  </View>
+                ) : (
+                  <FlatList
+                    data={transactions.slice(0, 4)} // Show only last 4 transactions
+                    keyExtractor={(item) => item.id}
+                    renderItem={({ item }) => <TransactionItem transaction={item} />}
+                    showsVerticalScrollIndicator={false}
+                  />
+                )}
+              </View>
+            </View>
+          </ThemedView>
+      </SafeAreaView>
+      
+      {/* Notification Sidebar - Outside SafeAreaView to appear above everything */}
+      {isNotificationOpen && (
+        <View style={styles.notificationOverlay}>
+          <TouchableOpacity 
+            style={styles.overlayTouchable}
+            onPress={() => setIsNotificationOpen(false)}
+          />
+          <View style={styles.notificationSidebar}>
+            <View style={styles.sidebarHeader}>
+              <ThemedText style={styles.sidebarTitle}>Inventory Alerts</ThemedText>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setIsNotificationOpen(false)}
+              >
+                <IconSymbol name="xmark" size={20} color="#9BA1A6" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.sidebarContent}>
+              {totalNotificationCount === 0 ? (
+                <View style={styles.emptyNotificationContainer}>
+                  <View style={styles.emptyIconContainer}>
+                    <IconSymbol name="checkmark.circle.fill" size={48} color="#9BA1A6" />
+                  </View>
+                  <ThemedText style={styles.emptyNotificationText}>All items in stock!</ThemedText>
+                  <ThemedText style={styles.emptyNotificationSubtext}>
+                    Your inventory is fully stocked. Great job!
+                  </ThemedText>
                 </View>
               ) : (
-                <FlatList
-                  data={transactions.slice(0, 5)} // Show only last 5 transactions
-                  keyExtractor={(item) => item.id}
-                  renderItem={({ item }) => <TransactionItem transaction={item} />}
-                  showsVerticalScrollIndicator={false}
-                />
+                <View style={styles.itemsListContainer}>
+                  <FlatList
+                    data={[...outOfStockItems, ...lowStockItems]}
+                    keyExtractor={(item) => item.id}
+                    renderItem={({ item }) => {
+                      const isOutOfStock = item.quantity === 0;
+                      const isLowStock = item.quantity > 0 && item.quantity <= 5;
+                      
+                      return (
+                        <View style={[
+                          styles.alertItem,
+                          isOutOfStock && styles.outOfStockItem,
+                          isLowStock && styles.lowStockItem
+                        ]}>
+                          <View style={styles.alertItemLeft}>
+                            {item.imageUri ? (
+                              <Image source={{ uri: item.imageUri }} style={styles.alertItemImage} resizeMode="cover" />
+                            ) : (
+                              <View style={[
+                                styles.alertItemIcon,
+                                isOutOfStock && styles.outOfStockIcon,
+                                isLowStock && styles.lowStockIcon
+                              ]}>
+                                <IconSymbol 
+                                  name={isOutOfStock ? "exclamationmark.triangle.fill" : "arrow.up.circle.fill"} 
+                                  size={26} 
+                                  color={isOutOfStock ? "#EF4444" : "#F59E0B"} 
+                                />
+                              </View>
+                            )}
+                            <View style={styles.alertItemInfo}>
+                              <ThemedText style={styles.alertItemName}>{item.name}</ThemedText>
+                              <View style={styles.alertItemDetails}>
+                                <ThemedText style={styles.alertItemPrice}>₹{item.sellingPrice}</ThemedText>
+                              </View>
+                            </View>
+                          </View>
+                          <View style={[
+                            styles.alertBadge,
+                            isOutOfStock && styles.outOfStockBadge,
+                            isLowStock && styles.lowStockBadge
+                          ]}>
+                            <ThemedText style={styles.alertBadgeText}>
+                              {isOutOfStock ? "OUT" : "LOW"}
+                            </ThemedText>
+                          </View>
+                        </View>
+                      );
+                    }}
+                    showsVerticalScrollIndicator={false}
+                  />
+                </View>
               )}
             </View>
           </View>
-        </ThemedView>
-    </SafeAreaView>
+        </View>
+      )}
+    </>
   );
 }
 
@@ -264,7 +385,7 @@ function TransactionItem({ transaction }: { transaction: Transaction }) {
         </View>
       </View>
       <View style={styles.transactionRight}>
-        <ThemedText style={styles.transactionPrice}>₹{transaction.price}</ThemedText>
+        <ThemedText style={[styles.transactionPrice, transaction.type === 'added' && { color: '#3B82F6' }]}>₹{transaction.price}</ThemedText>
         <ThemedText style={styles.transactionTime} darkColor="#9BA1A6">
           {formatTime(transaction.timestamp)}
         </ThemedText>
@@ -466,14 +587,14 @@ const styles = StyleSheet.create({
   percentChangeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2b7e0a58', 
+    backgroundColor: '#1F1F1F', 
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 10,
   },
   percentChangeText: {
     fontSize: 16,
-    color: '#10b981',
+    color: 'white',
     fontWeight: '700',
   },
   chartContainer: {
@@ -560,14 +681,217 @@ const styles = StyleSheet.create({
   transactionTime: {
     fontSize: 12,
   },
+  // Notification Sidebar Styles
+  notificationOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    zIndex: 9999,
+  },
+  overlayTouchable: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  notificationSidebar: {
+    width: '100%',
+    backgroundColor: '#1A1A1A',
+    borderLeftWidth: 1,
+    borderLeftColor: '#2A2A2A',
+    shadowColor: '#000',
+    shadowOffset: { width: -8, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 20,
+    zIndex: 10000,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    height: '100%',
+  },
+  sidebarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 24,
+    paddingTop: 60,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2A2A2A',
+    backgroundColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  sidebarTitle: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: -0.8,
+  },
+  closeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#2A2A2A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#3A3A3A',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  sidebarContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+  },
+  itemsListContainer: {
+    flex: 1,
+  },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#2A2A2A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#404040',
+  },
+  emptyNotificationContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 100,
+    paddingHorizontal: 24,
+  },
+  emptyNotificationText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginTop: 20,
+    textAlign: 'center',
+  },
+  emptyNotificationSubtext: {
+    fontSize: 16,
+    marginTop: 8,
+    textAlign: 'center',
+    color: '#9BA1A6',
+    lineHeight: 22,
+    fontWeight: '400',
+  },
+  // Alert Item Base Styles
+  alertItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#1A1A1A',
+    borderRadius: 0,
+    padding: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#333333',
+  },
+  outOfStockItem: {
+    borderLeftWidth: 3,
+    borderLeftColor: '#666666',
+  },
+  lowStockItem: {
+    borderLeftWidth: 3,
+    borderLeftColor: '#666666',
+  },
+  alertItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  alertItemImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 0,
+    marginRight: 12,
+  },
+  alertItemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    backgroundColor: '#2A2A2A',
+    borderWidth: 1,
+    borderColor: '#404040',
+  },
+  outOfStockIcon: {
+    backgroundColor: '#2A2A2A',
+    borderWidth: 1,
+    borderColor: '#404040',
+  },
+  lowStockIcon: {
+    backgroundColor: '#2A2A2A',
+    borderWidth: 1,
+    borderColor: '#404040',
+  },
+  alertItemInfo: {
+    flex: 1,
+  },
+  alertItemName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  alertItemDetails: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  alertItemPrice: {
+    fontSize: 14,
+    color: '#9BA1A6',
+    fontWeight: '500',
+  },
+  alertBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 0,
+    minWidth: 40,
+    alignItems: 'center',
+    backgroundColor: '#333333',
+    borderWidth: 1,
+    borderColor: '#404040',
+  },
+  outOfStockBadge: {
+    backgroundColor: '#333333',
+    borderColor: '#404040',
+  },
+  lowStockBadge: {
+    backgroundColor: '#333333',
+    borderColor: '#404040',
+  },
+  alertBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#CCCCCC',
+    letterSpacing: 0.5,
+  },
 });
 
-// Generate transactions from products (only real transactions)
-function generateTransactionsFromProducts(products: Product[]): Transaction[] {
+// Generate transactions from products and sales
+function generateTransactionsFromProducts(products: Product[], sales: any[]): Transaction[] {
   const transactions: Transaction[] = [];
   
+  // Add product addition transactions
   products.forEach((product) => {
-    // Add product addition transaction
     transactions.push({
       id: `add-${product.id}`,
       type: 'added',
@@ -577,6 +901,22 @@ function generateTransactionsFromProducts(products: Product[]): Transaction[] {
       timestamp: product.addedDate,
       imageUri: product.imageUri,
     });
+  });
+  
+  // Add sales transactions
+  sales.forEach((sale) => {
+    const product = products.find(p => p.id === sale.productId);
+    if (product) {
+      transactions.push({
+        id: `sale-${sale.id}`,
+        type: 'sold',
+        productName: product.name,
+        quantity: sale.quantitySold,
+        price: sale.totalAmount,
+        timestamp: sale.saleDate,
+        imageUri: product.imageUri,
+      });
+    }
   });
   
   // Sort by timestamp (newest first)

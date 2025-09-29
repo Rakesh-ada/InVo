@@ -5,10 +5,12 @@ import { Image, useWindowDimensions } from 'react-native';
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
+import { TabBarProvider, useTabBar } from '@/contexts/TabBarContext';
 
-export default function TabLayout() {
+function TabLayoutContent() {
   const colorScheme = 'dark' as const;
   const { width: screenWidth } = useWindowDimensions();
+  const { isTabBarVisible } = useTabBar();
   const TARGET_WIDTH = 350;
   const tabWidth = Math.min(TARGET_WIDTH, screenWidth - 32);
   const horizontal = (screenWidth - tabWidth) / 2;
@@ -25,8 +27,8 @@ export default function TabLayout() {
           bottom: 25,
           height: 64,
           width: 'auto',
-          marginLeft: 15,
-          marginRight: 15,
+          marginLeft: 20,
+          marginRight: 20,
           borderRadius: 24,
           backgroundColor:
             colorScheme === 'dark'
@@ -43,6 +45,7 @@ export default function TabLayout() {
           shadowOffset: { width: 0, height: 4 },
           // elevation (Android)
           elevation: colorScheme === 'dark' ? 10 : 6,
+          display: isTabBarVisible ? 'flex' : 'none',
         },
         headerShown: false,
         tabBarButton: HapticTab,
@@ -95,5 +98,13 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+  );
+}
+
+export default function TabLayout() {
+  return (
+    <TabBarProvider>
+      <TabLayoutContent />
+    </TabBarProvider>
   );
 }
