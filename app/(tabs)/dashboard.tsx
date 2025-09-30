@@ -6,7 +6,7 @@ import { dbService, Product } from '@/services/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useState } from 'react';
-import { FlatList, Image, StyleSheet, View } from 'react-native';
+import { FlatList, Image, RefreshControl, StyleSheet, View } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -62,7 +62,10 @@ export default function DashboardScreen() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [salesData, setSalesData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [todaysTotals, setTodaysTotals] = useState<{ totalAmount: number; totalItems: number }>({ totalAmount: 0, totalItems: 0 });
+  const [ignoredAlertIds, setIgnoredAlertIds] = useState<string[]>([]);
   const [preferences, setPreferences] = useState<DashboardPreferences>({
     lastViewedDate: new Date().toISOString(),
     favoriteMetrics: ['totalItems', 'productTypes'],
@@ -73,16 +76,33 @@ export default function DashboardScreen() {
   const totalProductsIn = products.reduce((sum, product) => sum + product.quantity, 0);
   const inventoryValue = products.reduce((sum, product) => sum + (product.buyingPrice * product.quantity), 0);
   
-  // Calculate sales metrics
-  const totalSalesAmount = salesData.reduce((sum, sale) => sum + sale.totalAmount, 0);
-  const totalItemsSold = salesData.reduce((sum, sale) => sum + sale.quantitySold, 0);
+  // Daily sales metrics
+  const totalSalesAmount = todaysTotals.totalAmount;
+  const totalItemsSold = todaysTotals.totalItems;
+
+  // Weekly items sold (last 7 days, inclusive)
+  const weeklyItemsSold = React.useMemo(() => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    start.setDate(start.getDate() - 6);
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    let items = 0;
+    salesData.forEach((s: any) => {
+      const d = new Date(s.saleDate);
+      if (d >= start && d <= end) {
+        items += Number(s.quantitySold) || 0;
+      }
+    });
+    return items;
+  }, [salesData]);
   
   // Calculate out of stock and low stock items
   const outOfStockItems = products.filter(product => product.quantity === 0);
   const lowStockItems = products.filter(product => product.quantity > 0 && product.quantity <= 5);
-  const outOfStockCount = outOfStockItems.length;
-  const lowStockCount = lowStockItems.length;
-  const totalNotificationCount = outOfStockCount + lowStockCount;
+  // Ignore list applies ONLY to low-stock items, not out-of-stock
+  const visibleOutOfStock = outOfStockItems; // never ignored
+  const visibleLowStock = lowStockItems.filter(p => !ignoredAlertIds.includes(p.id));
+  const totalNotificationCount = visibleOutOfStock.length + visibleLowStock.length;
 
   // Keep tab bar visible when notification sidebar is open
   // useEffect(() => {
@@ -98,6 +118,13 @@ export default function DashboardScreen() {
       if (storedPrefs) {
         setPreferences(JSON.parse(storedPrefs));
       }
+      // Load ignored alert ids
+      const storedIgnored = await AsyncStorage.getItem('@inventory_ignored_ids');
+      if (storedIgnored) {
+        try {
+          setIgnoredAlertIds(JSON.parse(storedIgnored));
+        } catch {}
+      }
       
       // Load products data
       const isHealthy = await dbService.checkDatabaseHealth();
@@ -106,10 +133,28 @@ export default function DashboardScreen() {
       }
       const productsData = await dbService.getProducts();
       setProducts(productsData);
+
+      // Auto-clean ignored IDs when item is no longer low stock
+      try {
+        const cleanedIgnored = (ignoredAlertIds || []).filter((id) => {
+          const p = productsData.find((x) => x.id === id);
+          if (!p) return false; // remove if product no longer exists
+          // keep ignored only if still low stock (1..5). If restocked (>5) or out of stock (0), remove from ignore.
+          return p.quantity > 0 && p.quantity <= 5;
+        });
+        if (cleanedIgnored.length !== (ignoredAlertIds || []).length) {
+          setIgnoredAlertIds(cleanedIgnored);
+          await AsyncStorage.setItem('@inventory_ignored_ids', JSON.stringify(cleanedIgnored));
+        }
+      } catch {}
       
-      // Load sales data
-      const sales = await dbService.getSalesData();
+      // Load sales data (all) and today's totals
+      const [sales, today] = await Promise.all([
+        dbService.getSalesData(),
+        dbService.getTodaysSalesTotal(),
+      ]);
       setSalesData(sales);
+      setTodaysTotals(today);
       
       // Generate transactions from products and sales
       const generatedTransactions = generateTransactionsFromProducts(productsData, sales);
@@ -140,6 +185,25 @@ export default function DashboardScreen() {
       return () => {};
     }, [])
   );
+
+  const onRefresh = useCallback(async () => {
+    try {
+      setIsRefreshing(true);
+      await loadDashboardData();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [loadDashboardData]);
+
+  const handleIgnoreAlert = useCallback(async (productId: string) => {
+    try {
+      const next = Array.from(new Set([...ignoredAlertIds, productId]));
+      setIgnoredAlertIds(next);
+      await AsyncStorage.setItem('@inventory_ignored_ids', JSON.stringify(next));
+    } catch (e) {
+      console.warn('Failed to ignore alert:', e);
+    }
+  }, [ignoredAlertIds]);
 
   return (
     <>
@@ -173,14 +237,14 @@ export default function DashboardScreen() {
               />
               <StatCard 
                 label="Items Sold" 
-                value={isLoading ? "..." : totalItemsSold.toLocaleString()} 
+                value={isLoading ? "..." : weeklyItemsSold.toLocaleString()} 
                 deltaLabel="" 
                 deltaColor="#22C55E" 
               />
             </View>
 
             <View style={styles.revenueSection}>
-              <ThemedText style={styles.sectionTitle} darkColor="#9BA1A6">Total Sales Revenue</ThemedText>
+              <ThemedText style={styles.sectionTitle} darkColor="#9BA1A6">Today Sales Revenue</ThemedText>
               <View style={styles.revenueRow}>
                 <View style={styles.revenueValueContainer}>
                   <ThemedText style={styles.currencySymbol}>₹</ThemedText>
@@ -212,10 +276,19 @@ export default function DashboardScreen() {
                   </View>
                 ) : (
                   <FlatList
-                    data={transactions.slice(0, 4)} // Show only last 4 transactions
+                    data={transactions}
                     keyExtractor={(item) => item.id}
                     renderItem={({ item }) => <TransactionItem transaction={item} />}
                     showsVerticalScrollIndicator={false}
+                    style={styles.transactionsFlatList}
+                    refreshControl={
+                      <RefreshControl
+                        refreshing={isRefreshing}
+                        onRefresh={onRefresh}
+                        tintColor="#9BA1A6"
+                        colors={["#3b82f6"]}
+                      />
+                    }
                   />
                 )}
               </View>
@@ -249,13 +322,13 @@ export default function DashboardScreen() {
                   </View>
                   <ThemedText style={styles.emptyNotificationText}>All items in stock!</ThemedText>
                   <ThemedText style={styles.emptyNotificationSubtext}>
-                    Your inventory is fully stocked. Great job!
+                    Your inventory is fully stocked.
                   </ThemedText>
                 </View>
               ) : (
                 <View style={styles.itemsListContainer}>
                   <FlatList
-                    data={[...outOfStockItems, ...lowStockItems]}
+                    data={[...visibleOutOfStock, ...visibleLowStock]}
                     keyExtractor={(item) => item.id}
                     renderItem={({ item }) => {
                       const isOutOfStock = item.quantity === 0;
@@ -290,14 +363,21 @@ export default function DashboardScreen() {
                               </View>
                             </View>
                           </View>
-                          <View style={[
-                            styles.alertBadge,
-                            isOutOfStock && styles.outOfStockBadge,
-                            isLowStock && styles.lowStockBadge
-                          ]}>
-                            <ThemedText style={styles.alertBadgeText}>
-                              {isOutOfStock ? "OUT" : "LOW"}
-                            </ThemedText>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <View style={[
+                              styles.alertBadge,
+                              isOutOfStock && styles.outOfStockBadge,
+                              isLowStock && styles.lowStockBadge
+                            ]}>
+                              <ThemedText style={styles.alertBadgeText}>
+                                {isOutOfStock ? "OUT" : "LOW"}
+                              </ThemedText>
+                            </View>
+                            {isLowStock && (
+                              <TouchableOpacity onPress={() => handleIgnoreAlert(item.id)} style={styles.ignoreButton}>
+                                <ThemedText style={styles.ignoreButtonText}>Ignore</ThemedText>
+                              </TouchableOpacity>
+                            )}
                           </View>
                         </View>
                       );
@@ -603,7 +683,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   transactionsSection: {
-    marginBottom: 20,
+    marginBottom: 10,
   },
   transactionsList: {
     backgroundColor: '#1F1F1F',
@@ -611,6 +691,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 8,
     marginHorizontal: 4,
+  },
+  transactionsFlatList: {
+    maxHeight: 295,
   },
   loadingContainer: {
     padding: 20,
@@ -717,7 +800,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingVertical: 24,
-    paddingTop: 60,
+    paddingTop: 80,
     borderBottomWidth: 1,
     borderBottomColor: '#2A2A2A',
     backgroundColor: '#1A1A1A',
@@ -884,20 +967,43 @@ const styles = StyleSheet.create({
     color: '#CCCCCC',
     letterSpacing: 0.5,
   },
+  ignoreButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 0,
+    backgroundColor: '#2A2A2A',
+    borderWidth: 1,
+    borderColor: '#3A3A3A',
+  },
+  ignoreButtonText: {
+    fontSize: 12,
+    color: '#9BA1A6',
+    fontWeight: '600',
+  },
 });
 
 // Generate transactions from products and sales
 function generateTransactionsFromProducts(products: Product[], sales: any[]): Transaction[] {
   const transactions: Transaction[] = [];
   
+  // Compute total sold per product to reconstruct originally added quantity
+  const soldTotalsByProduct: Record<string, number> = {};
+  sales.forEach((sale) => {
+    const productId = sale.productId as string;
+    const qty = Number(sale.quantitySold) || 0;
+    soldTotalsByProduct[productId] = (soldTotalsByProduct[productId] || 0) + qty;
+  });
+  
   // Add product addition transactions
   products.forEach((product) => {
+    const totalSoldForProduct = soldTotalsByProduct[product.id] || 0;
+    const originallyAddedQty = product.quantity + totalSoldForProduct;
     transactions.push({
       id: `add-${product.id}`,
       type: 'added',
       productName: product.name,
-      quantity: product.quantity,
-      price: product.sellingPrice * product.quantity,
+      quantity: originallyAddedQty,
+      price: product.sellingPrice * originallyAddedQty,
       timestamp: product.addedDate,
       imageUri: product.imageUri,
     });

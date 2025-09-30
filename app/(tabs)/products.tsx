@@ -3,6 +3,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { dbService, Product } from '@/services/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
@@ -127,6 +128,8 @@ export default function ProductsScreen() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [tempExpiryDate, setTempExpiryDate] = useState<Date | null>(null);
   const onMeasureRow = useCallback((h: number) => {
     if (!measuredRowHeight && h > 0) setMeasuredRowHeight(h);
   }, [measuredRowHeight]);
@@ -236,6 +239,57 @@ export default function ProductsScreen() {
     }
   }, []);
 
+  const parseDisplayDate = (value: string): Date | null => {
+    // Expecting DD/MM/YYYY
+    const match = /^([0-3]\d)\/(0\d|1[0-2])\/(\d{4})$/.exec(value.trim());
+    if (!match) return null;
+    const day = Number(match[1]);
+    const month = Number(match[2]);
+    const year = Number(match[3]);
+    const d = new Date(year, month - 1, day);
+    // Validate no rollover
+    if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return null;
+    return d;
+  };
+
+  const formatDisplayDate = (date: Date) => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
+  };
+
+  const formatISODate = (date: Date) => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  };
+
+  const openExpiryDatePicker = useCallback(() => {
+    const parsed = expiryDateInput ? parseDisplayDate(expiryDateInput) : null;
+    const current = parsed ?? new Date();
+    setTempExpiryDate(current);
+    setIsDatePickerOpen(true);
+  }, [expiryDateInput]);
+
+  const onChangeExpiryDate = useCallback((event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === 'android') {
+      // On Android, event.type can be 'set' or 'dismissed'
+      if (event.type === 'set' && selected) {
+        setExpiryDateInput(formatDisplayDate(selected));
+      }
+      setIsDatePickerOpen(false);
+      return;
+    }
+
+    // iOS inline/modal behavior
+    if (selected) setTempExpiryDate(selected);
+  }, []);
+
+  const confirmIosDate = useCallback(() => {
+    if (tempExpiryDate) {
+      setExpiryDateInput(formatDisplayDate(tempExpiryDate));
+    }
+    setIsDatePickerOpen(false);
+  }, [tempExpiryDate]);
+
   useEffect(() => {
     loadFormData();
     loadProducts();
@@ -335,12 +389,16 @@ export default function ProductsScreen() {
         imageUri: selectedImage || undefined,
       });
 
+      // Normalize date to ISO (YYYY-MM-DD) for DB
+      const parsedDisplay = expiryDateInput ? parseDisplayDate(expiryDateInput) : null;
+      const expiryISO = (parsedDisplay ? formatISODate(parsedDisplay) : new Date().toISOString().split('T')[0]);
+
       await dbService.addProduct({
         name: trimmedName,
         buyingPrice,
         sellingPrice,
         quantity,
-        expiryDate: expiryDateInput || new Date().toISOString().split('T')[0],
+        expiryDate: expiryISO,
         imageUri: selectedImage || undefined,
       });
       
@@ -514,15 +572,38 @@ export default function ProductsScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <ThemedText style={styles.inputLabel} darkColor="#9BA1A6">Expiry Date</ThemedText>
-                    <TextInput
-                      value={expiryDateInput}
-                      onChangeText={setExpiryDateInput}
-                      placeholder="YYYY-MM-DD"
-                      placeholderTextColor="#6B7280"
-                      style={styles.input}
-                    />
+                    <View style={styles.dateFieldContainer}>
+                      <TextInput
+                        value={expiryDateInput}
+                        placeholder="DD/MM/YYYY"
+                        placeholderTextColor="#6B7280"
+                        style={[styles.input, { paddingRight: 44 }]}
+                        editable={false}
+                      />
+                      <TouchableOpacity style={styles.calendarButton} onPress={openExpiryDatePicker}>
+                        <IconSymbol name="calendar" size={20} color="#9BA1A6" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
+                {isDatePickerOpen && (
+                  <View style={{ marginTop: 8 }}>
+                    <DateTimePicker
+                      value={tempExpiryDate ?? (expiryDateInput ? (parseDisplayDate(expiryDateInput) ?? new Date()) : new Date())}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                      minimumDate={new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())}
+                      onChange={onChangeExpiryDate}
+                    />
+                    {Platform.OS === 'ios' && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 }}>
+                        <TouchableOpacity style={[styles.modalButton, { backgroundColor: '#22C55E' }]} onPress={confirmIosDate}>
+                          <ThemedText>Done</ThemedText>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                )}
                 
                 <View>
                   <ThemedText style={styles.inputLabel} darkColor="#9BA1A6">Product Image</ThemedText>
@@ -780,6 +861,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     height: 40,
     borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateFieldContainer: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  calendarButton: {
+    position: 'absolute',
+    right: 8,
+    height: 40,
+    width: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },

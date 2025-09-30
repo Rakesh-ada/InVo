@@ -28,6 +28,14 @@ export default function ProductDetailScreen() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   
+  const formatDisplayDate = (iso: string | undefined | null) => {
+    if (!iso) return '';
+    const parts = iso.split('T')[0]?.split('-');
+    if (!parts || parts.length !== 3) return iso;
+    const [y, m, d] = parts;
+    return `${d}/${m}/${y}`;
+  };
+
 
   const loadProduct = useCallback(async () => {
     try {
@@ -230,6 +238,22 @@ export default function ProductDetailScreen() {
             </View>
           </View>
 
+          {/* Quick Stats */}
+          <View style={styles.quickStatsRow}>
+            <View style={[styles.quickStatCard, { borderColor: '#3A3A3A' }]}>
+              <ThemedText style={styles.quickStatLabel} darkColor="#9BA1A6">Price</ThemedText>
+              <ThemedText style={styles.quickStatValue}>₹{product.sellingPrice}</ThemedText>
+            </View>
+            <View style={[styles.quickStatCard, { borderColor: '#3A3A3A' }]}>
+              <ThemedText style={styles.quickStatLabel} darkColor="#9BA1A6">Quantity</ThemedText>
+              <ThemedText style={styles.quickStatValue}>{product.quantity}</ThemedText>
+            </View>
+            <View style={[styles.quickStatCard, { borderColor: '#3A3A3A' }]}>
+              <ThemedText style={styles.quickStatLabel} darkColor="#9BA1A6">Expiry</ThemedText>
+              <ThemedText style={styles.quickStatValue}>{formatDisplayDate(product.expiryDate)}</ThemedText>
+            </View>
+          </View>
+
           {/* Product Details */}
           <View style={styles.detailsSection}>
             <View style={styles.detailRow}>
@@ -304,7 +328,7 @@ export default function ProductDetailScreen() {
                     onPress={() => setShowDatePicker(true)}
                   >
                     <ThemedText style={styles.datePickerText}>
-                      {expiryDateInput || 'Select Date'}
+                      {expiryDateInput ? formatDisplayDate(expiryDateInput) : 'Select Date'}
                     </ThemedText>
                     <View style={styles.calendarIconContainer}>
                       <IconSymbol name="calendar.badge.plus" size={18} color="#3B82F6" />
@@ -321,7 +345,7 @@ export default function ProductDetailScreen() {
                   )}
                 </View>
               ) : (
-                <ThemedText style={styles.detailValue}>{product.expiryDate}</ThemedText>
+                <ThemedText style={styles.detailValue}>{formatDisplayDate(product.expiryDate)}</ThemedText>
               )}
             </View>
 
@@ -411,18 +435,19 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   imageContainer: {
-    width: 500,
-    height: 250,
-    borderRadius: 24,
+    width: '100%',
+    height: 220,
+    borderRadius: 20,
     backgroundColor: '#1F1F1F',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
   },
   productImage: {
-    width: 500,
-    height: 250,
-    borderRadius: 24,
+    width: '100%',
+    height: '100%',
   },
   imagePlaceholder: {
     alignItems: 'center',
@@ -437,6 +462,8 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
   },
   detailRow: {
     flexDirection: 'row',
@@ -449,12 +476,12 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: '#ECEDEE',
     flex: 1,
   },
   detailValue: {
     fontSize: 16,
-    color: '#9BA1A6',
+    color: '#C7CBD1',
     textAlign: 'right',
     flex: 1,
   },
@@ -488,6 +515,10 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
   },
   saveButtonText: {
     color: '#FFFFFF',
@@ -505,6 +536,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#1F1F1F',
     borderRadius: 16,
     padding: 16,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+  },
+  quickStatsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  quickStatCard: {
+    flex: 1,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+  },
+  quickStatLabel: {
+    fontSize: 12,
+    letterSpacing: 0.6,
+    marginBottom: 6,
+  },
+  quickStatValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   modalActions: {
     flexDirection: 'row',

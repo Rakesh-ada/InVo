@@ -369,7 +369,7 @@ export default function ExploreScreen() {
       <View style={styles.container}>
         <View style={styles.content}>
           <View style={styles.header}>
-            <ThemedText style={{ fontSize: 32, fontWeight: 'bold', color: '#FFFFFF', opacity: 1 ,paddingBottom: 4,paddingTop: 4,paddingLeft: 5}}>Cart</ThemedText>
+            <ThemedText style={{ fontSize: 32, fontWeight: 'bold', color: '#FFFFFF', opacity: 1 ,paddingBottom: 4,paddingTop: 4,paddingHorizontal: 10}}>Cart</ThemedText>
             <View style={styles.headerRight}>
               <TouchableOpacity
                 accessibilityRole="button"
@@ -422,7 +422,7 @@ export default function ExploreScreen() {
             </View>
           )}
 
-          <SectionHeader title="" />
+          
           <View style={[styles.cartBox, styles.cartBoxFilled]}>
             {cart.length === 0 ? (
               <View style={styles.emptyCartContainer}>
@@ -512,7 +512,7 @@ export default function ExploreScreen() {
               
               <View style={styles.paymentSummary}>
                 <View style={styles.paymentTotal}>
-                  <ThemedText style={styles.paymentTotalLabel}>Total:</ThemedText>
+                  <ThemedText style={styles.paymentTotalLabel}>Total :</ThemedText>
                   <ThemedText style={styles.paymentTotalAmount}>₹{total.toFixed(2)}</ThemedText>
                 </View>
               </View>
@@ -547,14 +547,14 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
   content: { flex: 1 },
   bottomSection: { 
-    paddingTop: 16,
-    paddingBottom: 100,
+    paddingTop: 5,
+    paddingBottom: 80,
     backgroundColor: '#121212',
     borderTopWidth: 1,
     borderTopColor: '#2A2A2A',
   },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15, marginTop: 50 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8, marginRight: 5 },
   searchToggleBtn: { 
     width: 46,
     height: 46,
@@ -602,7 +602,8 @@ const styles = StyleSheet.create({
     height: 20,
   },
   searchWrap: { 
-    marginBottom: 10,
+    marginBottom: 0,
+    marginHorizontal: 5,
   },
   searchInputContainer: {
     flexDirection: 'row', 
@@ -635,10 +636,10 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   section: { marginVertical: 10, fontWeight: '700' },
-  suggestionBar: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 10 },
+  suggestionBar: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 0, marginTop: 15,marginHorizontal: 10 },
   suggestionChip: { backgroundColor: '#1A1A1A', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
   cartBox: { backgroundColor: 'transparent', borderRadius: 14, padding: 12, paddingBottom:0, flex: 1, borderWidth: 0, borderColor: 'transparent', shadowOpacity: 0, elevation: 0 },
-  cartBoxFilled: { backgroundColor: 'transparent', borderRadius: 14, padding: 12, minHeight: 140, maxHeight: 380, shadowColor: 'transparent', shadowOpacity: 0, shadowRadius: 0, shadowOffset: { width: 0, height: 0 }, elevation: 0, borderWidth: 0, borderColor: 'transparent' },
+  cartBoxFilled: { backgroundColor: 'transparent', borderRadius: 14, padding: 12, minHeight: 140, maxHeight: 420, shadowColor: 'transparent', shadowOpacity: 0, shadowRadius: 0, shadowOffset: { width: 0, height: 0 }, elevation: 0, borderWidth: 0, borderColor: 'transparent' },
   cartBoxEmpty: { backgroundColor: 'transparent', borderRadius: 14, padding: 12, minHeight: 140, maxHeight: 380, alignItems: 'center', justifyContent: 'center', borderWidth: 0, borderColor: 'transparent', shadowOpacity: 0, elevation: 0 },
   cartRow: { 
     backgroundColor: '#1F1F1F', 

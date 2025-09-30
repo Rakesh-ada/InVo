@@ -50,6 +50,7 @@ const MAPPING = {
   'checkmark.circle.fill': 'check-circle',
   'arrow.up.circle.fill': 'keyboard-arrow-up',
   'arrow.down.circle.fill': 'keyboard-arrow-down',
+  'calendar': 'calendar-today',
 } as IconMapping;
 
 /**

@@ -153,21 +153,21 @@ export default function SettingsScreen() {
                 value={settings.businessName}
                 onChangeText={(text) => updateSetting('businessName', text)}
                 style={styles.businessNameInput}
-                placeholder="Enter business name"
+                placeholder="Business name"
                 placeholderTextColor="#6B7280"
               />
             </View>
           </View>
         </View>
 
-        {/* Payment Settings */}
+        {/* Business QR */}
         <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Payment</ThemedText>
+          <ThemedText style={styles.sectionTitle}>Business QR</ThemedText>
           <View style={styles.settingCard}>
             <View style={styles.settingRow}>
               <View style={styles.settingLeft}>
                 <IconSymbol name="qrcode" size={20} color="#FFFFFF" />
-                <ThemedText style={styles.settingLabel}>QR Payment Code</ThemedText>
+                <ThemedText style={styles.settingLabel}>Business QR Code</ThemedText>
               </View>
               <TouchableOpacity 
                 style={styles.qrImageContainer} 
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     minWidth: 150,
-    textAlign: 'right',
+    textAlign: 'left',
   },
   qrImageContainer: {
     width: 48,
