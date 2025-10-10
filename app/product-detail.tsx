@@ -248,10 +248,6 @@ export default function ProductDetailScreen() {
               <ThemedText style={styles.quickStatLabel} darkColor="#9BA1A6">Quantity</ThemedText>
               <ThemedText style={styles.quickStatValue}>{product.quantity}</ThemedText>
             </View>
-            <View style={[styles.quickStatCard, { borderColor: '#3A3A3A' }]}>
-              <ThemedText style={styles.quickStatLabel} darkColor="#9BA1A6">Expiry</ThemedText>
-              <ThemedText style={styles.quickStatValue}>{formatDisplayDate(product.expiryDate)}</ThemedText>
-            </View>
           </View>
 
           {/* Product Details */}

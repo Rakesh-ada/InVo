@@ -318,7 +318,7 @@ export default function DashboardScreen() {
               {totalNotificationCount === 0 ? (
                 <View style={styles.emptyNotificationContainer}>
                   <View style={styles.emptyIconContainer}>
-                    <IconSymbol name="checkmark.circle.fill" size={48} color="#9BA1A6" />
+                    <IconSymbol name="checkmark.circle.fill" size={48} color="#10B981" />
                   </View>
                   <ThemedText style={styles.emptyNotificationText}>All items in stock!</ThemedText>
                   <ThemedText style={styles.emptyNotificationSubtext}>

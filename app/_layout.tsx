@@ -35,6 +35,9 @@ export default function RootLayout() {
         <Stack>
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="ai-chat" options={{ headerShown: false }} />
+          <Stack.Screen name="suppliers" options={{ headerShown: false }} />
+          <Stack.Screen name="supplier-order" options={{ headerShown: false }} />
           <Stack.Screen name="product-detail" options={{ 
             title: 'Product Details',
             headerStyle: { backgroundColor: '#121212' },

@@ -13,6 +13,15 @@ export type Product = {
   addedDate: string;
 };
 
+export type Supplier = {
+  id: string;
+  name: string;
+  phoneNumber: string;
+  whatsappNumber: string;
+  email?: string;
+  addedDate: string;
+};
+
 export type CartItem = { 
   id: string; 
   name: string; 
@@ -60,9 +69,9 @@ class DatabaseService {
       }
 
       // Wait for cleanup
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
 
-      // Open new database connection
+      // Open new database connection using stable async API
       console.log('Opening new database connection...');
       this.db = await SQLite.openDatabaseAsync(DB_NAME);
       console.log(`Database file: ${DB_NAME}`);
@@ -73,7 +82,7 @@ class DatabaseService {
 
       console.log('Database opened, testing connection...');
       
-      // Test basic connection
+      // Test basic connection using async API
       try {
         await this.db.getFirstAsync('SELECT 1 as test');
         console.log('Database connection test successful');
@@ -161,6 +170,21 @@ class DatabaseService {
       
       await this.db.execAsync(salesSQL);
       console.log('Sales table created');
+
+      // Create suppliers table
+      const suppliersSQL = `
+        CREATE TABLE IF NOT EXISTS suppliers (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          phoneNumber TEXT NOT NULL,
+          whatsappNumber TEXT NOT NULL,
+          email TEXT,
+          addedDate TEXT NOT NULL
+        )
+      `;
+      
+      await this.db.execAsync(suppliersSQL);
+      console.log('Suppliers table created');
       
       // Verify tables exist
       const tables = await this.db.getAllAsync("SELECT name FROM sqlite_master WHERE type='table'");
@@ -417,6 +441,136 @@ class DatabaseService {
       console.log('Database initialized successfully');
     } catch (error) {
       console.warn('Failed to initialize database:', error);
+    }
+  }
+
+  // Supplier operations
+  async getSuppliers(): Promise<Supplier[]> {
+    await this.ensureDatabase();
+    
+    if (!this.db) {
+      throw new Error('Database not available');
+    }
+
+    try {
+      const result = await this.db.getAllAsync('SELECT * FROM suppliers ORDER BY addedDate DESC');
+      return result.map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        phoneNumber: row.phoneNumber,
+        whatsappNumber: row.whatsappNumber,
+        email: row.email,
+        addedDate: row.addedDate
+      }));
+    } catch (error) {
+      console.warn('Failed to get suppliers:', error);
+      return [];
+    }
+  }
+
+  async addSupplier(supplier: Omit<Supplier, 'id' | 'addedDate'>): Promise<string> {
+    try {
+      await this.ensureDatabase();
+      
+      if (!this.db) {
+        throw new Error('Database not available');
+      }
+
+      const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+      const addedDate = new Date().toISOString();
+      
+      console.log('Adding supplier with data:', {
+        id,
+        name: supplier.name,
+        phoneNumber: supplier.phoneNumber,
+        whatsappNumber: supplier.whatsappNumber,
+        email: supplier.email || null,
+        addedDate
+      });
+      
+      // Validate input data
+      if (!supplier.name || supplier.name.trim().length === 0) {
+        throw new Error('Supplier name is required');
+      }
+      
+      if (!supplier.phoneNumber || supplier.phoneNumber.trim().length === 0) {
+        throw new Error('Phone number is required');
+      }
+      
+      if (!supplier.whatsappNumber || supplier.whatsappNumber.trim().length === 0) {
+        throw new Error('WhatsApp number is required');
+      }
+      
+      const result = await this.db.runAsync(
+        'INSERT INTO suppliers (id, name, phoneNumber, whatsappNumber, email, addedDate) VALUES (?, ?, ?, ?, ?, ?)',
+        [
+          id, 
+          supplier.name.trim(), 
+          supplier.phoneNumber.trim(), 
+          supplier.whatsappNumber.trim(), 
+          supplier.email?.trim() || null, 
+          addedDate
+        ]
+      );
+      
+      console.log('Supplier added successfully with result:', result);
+      console.log('Supplier ID:', id);
+      return id;
+    } catch (error) {
+      console.error('Failed to add supplier:', error);
+      
+      // If it's a database connection error, try to reinitialize
+      if (error instanceof Error && (error.message.includes('NullPointerException') || error.message.includes('prepareAsync') || error.message.includes('prepareSync'))) {
+        console.log('Database connection lost, attempting to reinitialize...');
+        this.isInitialized = false;
+        this.db = null;
+        this.initPromise = null;
+        
+        try {
+          await this.ensureDatabase();
+          // Retry the operation once
+          console.log('Retrying supplier add operation...');
+          return this.addSupplier(supplier);
+        } catch (retryError) {
+          console.error('Retry failed:', retryError);
+          throw new Error(`Failed to add supplier after retry: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`);
+        }
+      }
+      
+      throw new Error(`Failed to add supplier: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateSupplier(supplier: Supplier): Promise<void> {
+    await this.ensureDatabase();
+    
+    if (!this.db) {
+      throw new Error('Database not available');
+    }
+
+    try {
+      await this.db.runAsync(
+        'UPDATE suppliers SET name = ?, phoneNumber = ?, whatsappNumber = ?, email = ? WHERE id = ?',
+        [supplier.name.trim(), supplier.phoneNumber.trim(), supplier.whatsappNumber.trim(), supplier.email?.trim() || null, supplier.id]
+      );
+    } catch (error) {
+      console.warn('Failed to update supplier:', error);
+      throw error;
+    }
+  }
+
+  async deleteSupplier(id: string): Promise<void> {
+    await this.ensureDatabase();
+    
+    if (!this.db) {
+      throw new Error('Database not available');
+    }
+
+    try {
+      await this.db.runAsync('DELETE FROM suppliers WHERE id = ?', [id]);
+    } catch (error) {
+      console.warn('Failed to delete supplier:', error);
+      throw error;
     }
   }
 
