@@ -51,6 +51,11 @@ const MAPPING = {
   'arrow.up.circle.fill': 'keyboard-arrow-up',
   'arrow.down.circle.fill': 'keyboard-arrow-down',
   'calendar': 'calendar-today',
+  'star.fill': 'star',
+  'sparkles': 'auto-awesome',
+  'phone.fill': 'phone',
+  'phone': 'phone',
+  'arrow.right.square': 'logout',
 } as IconMapping;
 
 /**

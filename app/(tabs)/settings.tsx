@@ -1,12 +1,14 @@
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
+import { weeklyReportService } from '@/services/weekly-report';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Image, StyleSheet, Switch, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 // import * as FileSystem from 'expo-file-system';
-// import * as Sharing from 'expo-sharing';
+// import * * Sharing from 'expo-sharing';
 import * as ImagePicker from 'expo-image-picker';
 
 type SettingsData = {
@@ -19,6 +21,8 @@ type SettingsData = {
 };
 
 export default function SettingsScreen() {
+  const router = useRouter();
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [settings, setSettings] = useState<SettingsData>({
     profileName: 'John Doe',
     businessName: 'My Business',
@@ -107,6 +111,34 @@ export default function SettingsScreen() {
     }
   }, [updateSetting]);
 
+  const handleGenerateReport = useCallback(async () => {
+    setIsGeneratingReport(true);
+    try {
+      await weeklyReportService.generateAndDownloadReport();
+    } catch (error) {
+      console.error('Failed to generate report:', error);
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Logout', 
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert('Success', 'Logged out successfully!');
+            // Here you would typically clear user data and navigate to login
+          }
+        }
+      ]
+    );
+  }, []);
 
   const bg = Colors.dark.background;
 
@@ -119,7 +151,6 @@ export default function SettingsScreen() {
 
         {/* Profile Section */}
         <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Profile</ThemedText>
           <View style={styles.profileCard}>
             <TouchableOpacity style={styles.profileImage} onPress={pickProfileImage} activeOpacity={0.8}>
               {settings.profileImageUri ? (
@@ -137,12 +168,18 @@ export default function SettingsScreen() {
                 placeholderTextColor="#6B7280"
               />
             </View>
+            <TouchableOpacity 
+              onPress={handleLogout}
+              activeOpacity={0.7}
+              style={styles.logoutButton}
+            >
+              <IconSymbol name="arrow.right.square" size={20} color="#EF4444" />
+            </TouchableOpacity>
           </View>
         </View>
 
         {/* Business Settings */}
         <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Business</ThemedText>
           <View style={styles.settingCard}>
             <View style={styles.settingRow}>
               <View style={styles.settingLeft}>
@@ -162,7 +199,6 @@ export default function SettingsScreen() {
 
         {/* Business QR */}
         <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Business QR</ThemedText>
           <View style={styles.settingCard}>
             <View style={styles.settingRow}>
               <View style={styles.settingLeft}>
@@ -191,25 +227,59 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* App Settings */}
+        {/* Additional Features */}
         <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>App Settings</ThemedText>
-          
-          <View style={styles.settingCard}>
-            <View style={styles.settingRow}>
+          <View style={styles.settingCardWithSpacing}>
+            <TouchableOpacity 
+              style={styles.settingRow} 
+              activeOpacity={0.7}
+              onPress={() => router.push('/suppliers')}
+            >
               <View style={styles.settingLeft}>
-                <IconSymbol name="moon.fill" size={20} color="#FFFFFF" />
-                <ThemedText style={styles.settingLabel}>Dark Mode</ThemedText>
+                <IconSymbol name="person.fill" size={20} color="#FFFFFF" />
+                <ThemedText style={styles.settingLabel}>Suppliers</ThemedText>
               </View>
-              <Switch
-                value={settings.isDarkMode}
-                onValueChange={(value) => updateSetting('isDarkMode', value)}
-                trackColor={{ false: '#2A2A2A', true: '#3b82f6' }}
-                thumbColor={settings.isDarkMode ? '#FFFFFF' : '#9BA1A6'}
-              />
-            </View>
+              <IconSymbol name="chevron.right" size={16} color="#9BA1A6" />
+            </TouchableOpacity>
           </View>
 
+          <View style={styles.settingCardWithSpacing}>
+            <TouchableOpacity 
+              style={styles.settingRow} 
+              activeOpacity={0.7}
+              onPress={() => router.push('/ai-chat')}
+            >
+              <View style={styles.settingLeft}>
+                <IconSymbol name="sparkles" size={20} color="#FFFFFF" />
+                <ThemedText style={styles.settingLabel}>Ask InVo AI</ThemedText>
+              </View>
+              <IconSymbol name="chevron.right" size={16} color="#9BA1A6" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.settingCard}>
+            <TouchableOpacity 
+              style={styles.settingRow} 
+              activeOpacity={0.7}
+              onPress={handleGenerateReport}
+              disabled={isGeneratingReport}
+            >
+              <View style={styles.settingLeft}>
+                <IconSymbol name="chart.bar.fill" size={20} color="#FFFFFF" />
+                <ThemedText style={styles.settingLabel}>Weekly Report</ThemedText>
+              </View>
+              {isGeneratingReport ? (
+                <ActivityIndicator size="small" color="#3B82F6" />
+              ) : (
+                <IconSymbol name="chevron.right" size={16} color="#9BA1A6" />
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* App Settings */}
+        <View style={styles.section}>
+          
         </View>
 
       </View>
@@ -269,13 +339,18 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     backgroundColor: 'transparent',
     borderBottomWidth: 1,
-    borderBottomColor: '#2A2A2A',
+    borderBottomColor: 'transparent',
     paddingVertical: 4,
   },
   settingCard: {
     backgroundColor: '#1F1F1F',
     borderRadius: 12,
-    marginBottom: 8,
+    marginBottom: 0,
+  },
+  settingCardWithSpacing: {
+    backgroundColor: '#1F1F1F',
+    borderRadius: 12,
+    marginBottom: 12,
   },
   settingRow: {
     flexDirection: 'row',
@@ -302,7 +377,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     minWidth: 150,
-    textAlign: 'left',
+    textAlign: 'center',
   },
   qrImageContainer: {
     width: 48,
@@ -328,5 +403,14 @@ const styles = StyleSheet.create({
     marginTop: 1,
     textAlign: 'center',
     lineHeight: 8,
+  },
+  logoutButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  logoutText: {
+    fontSize: 14,
+    color: '#EF4444',
+    fontWeight: '600',
   },
 });
