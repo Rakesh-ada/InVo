@@ -34,6 +34,7 @@ export default function RootLayout() {
       <ThemeProvider value={customDarkTheme}>
         <Stack>
           <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="ai-chat" options={{ headerShown: false }} />
           <Stack.Screen name="suppliers" options={{ headerShown: false }} />

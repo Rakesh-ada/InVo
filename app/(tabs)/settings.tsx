@@ -122,23 +122,91 @@ export default function SettingsScreen() {
     }
   }, []);
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
     Alert.alert(
       'Logout',
-      'Are you sure you want to logout?',
+      'Are you sure you want to logout? This will clear all your data and reset the app.',
       [
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Logout', 
           style: 'destructive',
-          onPress: () => {
-            Alert.alert('Success', 'Logged out successfully!');
-            // Here you would typically clear user data and navigate to login
+          onPress: async () => {
+            try {
+              // Clear all AsyncStorage data
+              await AsyncStorage.multiRemove([
+                '@invo_settings',
+                '@profile_name',
+                '@business_name',
+                '@dark_mode',
+                '@auto_sync',
+                '@onboarding_complete',
+                '@products_form_data',
+                '@search_history',
+                '@cart_data',
+                '@daily_sales_data',
+                '@inventory_ignored_ids',
+                '@dashboard_preferences',
+                '@product_view_history'
+              ]);
+
+              // Clear any edit drafts
+              const keys = await AsyncStorage.getAllKeys();
+              const editDraftKeys = keys.filter(key => key.startsWith('@edit_draft_'));
+              if (editDraftKeys.length > 0) {
+                await AsyncStorage.multiRemove(editDraftKeys);
+              }
+
+              // Clear database (reset to initial state)
+              try {
+                const { dbService } = await import('@/services/database');
+                await dbService.resetDatabase();
+              } catch (e) {
+                console.warn('Failed to reset database:', e);
+              }
+
+              Alert.alert('Success', 'Logged out successfully! App will reset to onboarding.', [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    // Navigate to onboarding
+                    router.replace('/onboarding');
+                  }
+                }
+              ]);
+            } catch (error) {
+              console.error('Failed to logout:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
           }
         }
       ]
     );
-  }, []);
+  }, [router]);
+
+  const logout = async () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout? This will clear your data and show the onboarding screen.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Clear onboarding completion flag to show onboarding again
+              await AsyncStorage.removeItem('@onboarding_complete');
+              // Navigate to index which will redirect to onboarding
+              router.replace('/');
+            } catch (e) {
+              console.warn('Failed to logout', e);
+            }
+          }
+        }
+      ]
+    );
+  };
 
   const bg = Colors.dark.background;
 
@@ -411,6 +479,18 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: 14,
     color: '#EF4444',
+    fontWeight: '600',
+  },
+  button: {
+    backgroundColor: '#3B82F6',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
     fontWeight: '600',
   },
 });
