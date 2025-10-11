@@ -4,7 +4,7 @@ import { Colors } from '@/constants/theme';
 import { dbService, Supplier } from '@/services/database';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, FlatList, KeyboardAvoidingView, Modal, Platform, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -311,7 +311,7 @@ export default function SuppliersScreen() {
                 <TouchableOpacity style={[styles.modalButton, { backgroundColor: '#2A2A2A' }]} onPress={closeAddForm}>
                   <ThemedText>Cancel</ThemedText>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.modalButton, { backgroundColor: '#22C55E' }]} onPress={handleAddSupplier}>
+                <TouchableOpacity style={[styles.modalButton, { backgroundColor: '#3B82F6' }]} onPress={handleAddSupplier}>
                   <ThemedText>Save</ThemedText>
                 </TouchableOpacity>
               </View>

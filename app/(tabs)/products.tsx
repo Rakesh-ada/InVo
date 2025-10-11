@@ -7,7 +7,7 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, FlatList, Image, KeyboardAvoidingView, Modal, Platform, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -480,7 +480,7 @@ export default function ProductsScreen() {
             label="Total Products" 
             value={currentProducts.length.toString()} 
             deltaLabel="" 
-            deltaColor="#22C55E" 
+            deltaColor="#3B82F6" 
           />
           <StatCard 
             label="Stock in Hand" 
@@ -597,7 +597,7 @@ export default function ProductsScreen() {
                     />
                     {Platform.OS === 'ios' && (
                       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 }}>
-                        <TouchableOpacity style={[styles.modalButton, { backgroundColor: '#22C55E' }]} onPress={confirmIosDate}>
+                        <TouchableOpacity style={[styles.modalButton, { backgroundColor: '#3B82F6' }]} onPress={confirmIosDate}>
                           <ThemedText>Done</ThemedText>
                         </TouchableOpacity>
                       </View>
@@ -624,7 +624,7 @@ export default function ProductsScreen() {
                 <TouchableOpacity style={[styles.modalButton, { backgroundColor: '#2A2A2A' }]} onPress={closeAddForm}>
                   <ThemedText>Cancel</ThemedText>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.modalButton, { backgroundColor: '#22C55E' }]} onPress={handleAddProduct}>
+                <TouchableOpacity style={[styles.modalButton, { backgroundColor: '#3B82F6' }]} onPress={handleAddProduct}>
                   <ThemedText>Save</ThemedText>
                 </TouchableOpacity>
               </View>

@@ -45,9 +45,42 @@ class DatabaseService {
       return;
     }
 
-    // Start initialization
-    this.initPromise = this._doInitDatabase();
+    // Start initialization with retry logic
+    this.initPromise = this._doInitDatabaseWithRetry();
     return this.initPromise;
+  }
+
+  private async _doInitDatabaseWithRetry(): Promise<void> {
+    let attempts = 0;
+    const maxAttempts = 3;
+
+    while (attempts < maxAttempts) {
+      try {
+        await this._doInitDatabase();
+        return; // Success, exit retry loop
+      } catch (error) {
+        attempts++;
+        console.warn(`Database initialization attempt ${attempts} failed:`, error);
+        
+        if (attempts >= maxAttempts) {
+          throw error; // Final attempt failed, throw error
+        }
+        
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Reset state for retry
+        this.isInitialized = false;
+        if (this.db) {
+          try {
+            await this.db.closeAsync();
+          } catch (e) {
+            console.warn('Error closing database during retry:', e);
+          }
+          this.db = null;
+        }
+      }
+    }
   }
 
   private async _doInitDatabase(): Promise<void> {
@@ -69,22 +102,22 @@ class DatabaseService {
       }
 
       // Wait for cleanup
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Open new database connection using stable async API
+      // Open new database connection
       console.log('Opening new database connection...');
       this.db = await SQLite.openDatabaseAsync(DB_NAME);
-      console.log(`Database file: ${DB_NAME}`);
+      console.log(`Database opened: ${DB_NAME}`);
       
       if (!this.db) {
         throw new Error('Failed to open database - connection is null');
       }
 
-      console.log('Database opened, testing connection...');
+      console.log('Testing database connection...');
       
-      // Test basic connection using async API
+      // Test basic connection with a simple query
       try {
-        await this.db.getFirstAsync('SELECT 1 as test');
+        await this.db.execAsync('PRAGMA table_info(sqlite_master);');
         console.log('Database connection test successful');
       } catch (e) {
         console.error('Database connection test failed:', e);
@@ -116,8 +149,12 @@ class DatabaseService {
     try {
       console.log('Creating database tables...');
       
-      // Create products table with optimizations for unlimited items
-      const productsSQL = `
+      // Drop and recreate suppliers table to ensure correct schema
+      await this.db.execAsync('DROP TABLE IF EXISTS suppliers;');
+      console.log('Dropped existing suppliers table');
+      
+      // Create products table
+      await this.db.execAsync(`
         CREATE TABLE IF NOT EXISTS products (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
@@ -127,72 +164,60 @@ class DatabaseService {
           expiryDate TEXT NOT NULL,
           imageUri TEXT,
           addedDate TEXT NOT NULL
-        )
-      `;
-      
-      // Create indexes for better performance with large datasets
-      const indexSQL = `
-        CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
-        CREATE INDEX IF NOT EXISTS idx_products_addedDate ON products(addedDate);
-        CREATE INDEX IF NOT EXISTS idx_products_expiryDate ON products(expiryDate);
-      `;
-      
-      await this.db.execAsync(productsSQL);
+        );
+      `);
       console.log('Products table created');
       
       // Create indexes for better performance
-      await this.db.execAsync(indexSQL);
-      console.log('Database indexes created');
+      await this.db.execAsync(`
+        CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
+        CREATE INDEX IF NOT EXISTS idx_products_addedDate ON products(addedDate);
+      `);
+      console.log('Product indexes created');
       
       // Create cart_items table
-      const cartSQL = `
+      await this.db.execAsync(`
         CREATE TABLE IF NOT EXISTS cart_items (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
           qty INTEGER NOT NULL,
           price REAL NOT NULL
-        )
-      `;
-      
-      await this.db.execAsync(cartSQL);
+        );
+      `);
       console.log('Cart items table created');
       
       // Create sales table
-      const salesSQL = `
+      await this.db.execAsync(`
         CREATE TABLE IF NOT EXISTS sales (
           id TEXT PRIMARY KEY,
           productId TEXT NOT NULL,
           quantitySold INTEGER NOT NULL,
           totalAmount REAL NOT NULL,
           saleDate TEXT NOT NULL
-        )
-      `;
-      
-      await this.db.execAsync(salesSQL);
+        );
+      `);
       console.log('Sales table created');
 
-      // Create suppliers table
-      const suppliersSQL = `
-        CREATE TABLE IF NOT EXISTS suppliers (
+      // Create suppliers table with correct schema
+      await this.db.execAsync(`
+        CREATE TABLE suppliers (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
           phoneNumber TEXT NOT NULL,
           whatsappNumber TEXT NOT NULL,
           email TEXT,
           addedDate TEXT NOT NULL
-        )
-      `;
+        );
+      `);
+      console.log('Suppliers table created with correct schema');
       
-      await this.db.execAsync(suppliersSQL);
-      console.log('Suppliers table created');
-      
-      // Verify tables exist
+      // Verify tables exist and check schema
       const tables = await this.db.getAllAsync("SELECT name FROM sqlite_master WHERE type='table'");
       console.log('Available tables:', tables.map((t: any) => t.name));
       
-      // Check if there are existing products
-      const existingProducts = await this.db.getFirstAsync('SELECT COUNT(*) as count FROM products') as { count: number } | null;
-      console.log(`Existing products in database: ${existingProducts?.count || 0}`);
+      // Check suppliers table schema
+      const suppliersSchema = await this.db.getAllAsync("PRAGMA table_info(suppliers)");
+      console.log('Suppliers table schema:', suppliersSchema);
       
     } catch (error) {
       console.error('Failed to create tables:', error);
@@ -341,17 +366,45 @@ class DatabaseService {
   }
 
   async deleteProduct(id: string): Promise<void> {
-    await this.ensureDatabase();
-    
-    if (!this.db) {
-      throw new Error('Database not available');
-    }
-
     try {
-      await this.db.runAsync('DELETE FROM products WHERE id = ?', [id]);
+      await this.ensureDatabase();
+      
+      if (!this.db) {
+        throw new Error('Database not available');
+      }
+
+      console.log('Deleting product with ID:', id);
+      
+      // Use execAsync instead of runAsync to avoid prepareAsync issues
+      await this.db.execAsync(`DELETE FROM products WHERE id = '${id.replace(/'/g, "''")}'`);
+      
+      console.log('Product deleted successfully');
     } catch (error) {
-      console.warn('Failed to delete product:', error);
-      throw error;
+      console.error('Failed to delete product:', error);
+      
+      // If it's a database connection error, try to reinitialize
+      if (error instanceof Error && (
+        error.message.includes('NullPointerException') || 
+        error.message.includes('prepareAsync') || 
+        error.message.includes('database') ||
+        error.message.includes('connection')
+      )) {
+        console.log('Database connection issue detected during product delete, reinitializing...');
+        this.isInitialized = false;
+        this.db = null;
+        this.initPromise = null;
+        
+        try {
+          await this.initDatabase();
+          console.log('Database reinitialized, retrying product delete...');
+          return this.deleteProduct(id);
+        } catch (retryError) {
+          console.error('Product delete retry failed:', retryError);
+          throw new Error(`Failed to delete product after retry: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`);
+        }
+      }
+      
+      throw new Error(`Failed to delete product: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -384,17 +437,44 @@ class DatabaseService {
   }
 
   async clearAllProducts(): Promise<void> {
-    await this.ensureDatabase();
-    
-    if (!this.db) {
-      throw new Error('Database not available');
-    }
-    
     try {
-      await this.db.runAsync('DELETE FROM products');
+      await this.ensureDatabase();
+      
+      if (!this.db) {
+        throw new Error('Database not available');
+      }
+      
+      console.log('Clearing all products...');
+      
+      // Use execAsync instead of runAsync
+      await this.db.execAsync('DELETE FROM products');
+      
       console.log('All products cleared');
     } catch (error) {
-      console.warn('Failed to clear products:', error);
+      console.error('Failed to clear products:', error);
+      
+      // If it's a database connection error, try to reinitialize
+      if (error instanceof Error && (
+        error.message.includes('NullPointerException') || 
+        error.message.includes('prepareAsync') || 
+        error.message.includes('database') ||
+        error.message.includes('connection')
+      )) {
+        console.log('Database connection issue detected during clear products, reinitializing...');
+        this.isInitialized = false;
+        this.db = null;
+        this.initPromise = null;
+        
+        try {
+          await this.initDatabase();
+          console.log('Database reinitialized, retrying clear products...');
+          return this.clearAllProducts();
+        } catch (retryError) {
+          console.error('Clear products retry failed:', retryError);
+          throw new Error(`Failed to clear products after retry: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`);
+        }
+      }
+      
       throw error;
     }
   }
@@ -476,19 +556,7 @@ class DatabaseService {
         throw new Error('Database not available');
       }
 
-      const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-      const addedDate = new Date().toISOString();
-      
-      console.log('Adding supplier with data:', {
-        id,
-        name: supplier.name,
-        phoneNumber: supplier.phoneNumber,
-        whatsappNumber: supplier.whatsappNumber,
-        email: supplier.email || null,
-        addedDate
-      });
-      
-      // Validate input data
+      // Validate input data first
       if (!supplier.name || supplier.name.trim().length === 0) {
         throw new Error('Supplier name is required');
       }
@@ -500,36 +568,69 @@ class DatabaseService {
       if (!supplier.whatsappNumber || supplier.whatsappNumber.trim().length === 0) {
         throw new Error('WhatsApp number is required');
       }
+
+      const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+      const addedDate = new Date().toISOString();
       
-      const result = await this.db.runAsync(
-        'INSERT INTO suppliers (id, name, phoneNumber, whatsappNumber, email, addedDate) VALUES (?, ?, ?, ?, ?, ?)',
-        [
-          id, 
-          supplier.name.trim(), 
-          supplier.phoneNumber.trim(), 
-          supplier.whatsappNumber.trim(), 
-          supplier.email?.trim() || null, 
-          addedDate
-        ]
-      );
+      console.log('Adding supplier with data:', {
+        id,
+        name: supplier.name.trim(),
+        phoneNumber: supplier.phoneNumber.trim(),
+        whatsappNumber: supplier.whatsappNumber.trim()
+      });
       
-      console.log('Supplier added successfully with result:', result);
-      console.log('Supplier ID:', id);
+      // Use execAsync instead of runAsync to avoid prepareAsync issues
+      await this.db.execAsync(`
+        INSERT INTO suppliers (id, name, phoneNumber, whatsappNumber, email, addedDate) 
+        VALUES (
+          '${id}', 
+          '${supplier.name.trim().replace(/'/g, "''")}', 
+          '${supplier.phoneNumber.trim()}', 
+          '${supplier.whatsappNumber.trim()}', 
+          ${supplier.email?.trim() ? `'${supplier.email.trim().replace(/'/g, "''")}'` : 'NULL'}, 
+          '${addedDate}'
+        )
+      `);
+      
+      console.log('Supplier added successfully with ID:', id);
       return id;
     } catch (error) {
       console.error('Failed to add supplier:', error);
       
-      // If it's a database connection error, try to reinitialize
-      if (error instanceof Error && (error.message.includes('NullPointerException') || error.message.includes('prepareAsync') || error.message.includes('prepareSync'))) {
-        console.log('Database connection lost, attempting to reinitialize...');
+      // If it's a schema error, try to reset and recreate database
+      if (error instanceof Error && (
+        error.message.includes('no column named') ||
+        error.message.includes('no such column') ||
+        error.message.includes('table suppliers has no column')
+      )) {
+        console.log('Schema mismatch detected, resetting database...');
+        try {
+          await this.resetDatabase();
+          console.log('Database reset complete, retrying supplier add...');
+          // Retry the operation once after resetting
+          return this.addSupplier(supplier);
+        } catch (resetError) {
+          console.error('Database reset failed:', resetError);
+          throw new Error(`Failed to add supplier after database reset: ${resetError instanceof Error ? resetError.message : 'Unknown error'}`);
+        }
+      }
+      
+      // If it's a general database connection error, try to reinitialize
+      if (error instanceof Error && (
+        error.message.includes('NullPointerException') || 
+        error.message.includes('prepareAsync') || 
+        error.message.includes('database') ||
+        error.message.includes('connection')
+      )) {
+        console.log('Database connection issue detected, reinitializing...');
         this.isInitialized = false;
         this.db = null;
         this.initPromise = null;
         
         try {
-          await this.ensureDatabase();
-          // Retry the operation once
-          console.log('Retrying supplier add operation...');
+          await this.initDatabase();
+          console.log('Database reinitialized, retrying supplier add...');
+          // Retry the operation once after reinitializing
           return this.addSupplier(supplier);
         } catch (retryError) {
           console.error('Retry failed:', retryError);
@@ -542,35 +643,97 @@ class DatabaseService {
   }
 
   async updateSupplier(supplier: Supplier): Promise<void> {
-    await this.ensureDatabase();
-    
-    if (!this.db) {
-      throw new Error('Database not available');
-    }
-
     try {
-      await this.db.runAsync(
-        'UPDATE suppliers SET name = ?, phoneNumber = ?, whatsappNumber = ?, email = ? WHERE id = ?',
-        [supplier.name.trim(), supplier.phoneNumber.trim(), supplier.whatsappNumber.trim(), supplier.email?.trim() || null, supplier.id]
-      );
+      await this.ensureDatabase();
+      
+      if (!this.db) {
+        throw new Error('Database not available');
+      }
+
+      console.log('Updating supplier:', supplier.id);
+      
+      // Use execAsync instead of runAsync to avoid prepareAsync issues
+      await this.db.execAsync(`
+        UPDATE suppliers 
+        SET name = '${supplier.name.trim().replace(/'/g, "''")}', 
+            phoneNumber = '${supplier.phoneNumber.trim()}', 
+            whatsappNumber = '${supplier.whatsappNumber.trim()}', 
+            email = ${supplier.email?.trim() ? `'${supplier.email.trim().replace(/'/g, "''")}'` : 'NULL'}
+        WHERE id = '${supplier.id.replace(/'/g, "''")}'
+      `);
+      
+      console.log('Supplier updated successfully');
     } catch (error) {
-      console.warn('Failed to update supplier:', error);
-      throw error;
+      console.error('Failed to update supplier:', error);
+      
+      // If it's a database connection error, try to reinitialize
+      if (error instanceof Error && (
+        error.message.includes('NullPointerException') || 
+        error.message.includes('prepareAsync') || 
+        error.message.includes('database') ||
+        error.message.includes('connection')
+      )) {
+        console.log('Database connection issue detected during update, reinitializing...');
+        this.isInitialized = false;
+        this.db = null;
+        this.initPromise = null;
+        
+        try {
+          await this.initDatabase();
+          console.log('Database reinitialized, retrying supplier update...');
+          // Retry the operation once after reinitializing
+          return this.updateSupplier(supplier);
+        } catch (retryError) {
+          console.error('Update retry failed:', retryError);
+          throw new Error(`Failed to update supplier after retry: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`);
+        }
+      }
+      
+      throw new Error(`Failed to update supplier: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   async deleteSupplier(id: string): Promise<void> {
-    await this.ensureDatabase();
-    
-    if (!this.db) {
-      throw new Error('Database not available');
-    }
-
     try {
-      await this.db.runAsync('DELETE FROM suppliers WHERE id = ?', [id]);
+      await this.ensureDatabase();
+      
+      if (!this.db) {
+        throw new Error('Database not available');
+      }
+
+      console.log('Deleting supplier with ID:', id);
+      
+      // Use execAsync instead of runAsync to avoid prepareAsync issues
+      await this.db.execAsync(`DELETE FROM suppliers WHERE id = '${id.replace(/'/g, "''")}'`);
+      
+      console.log('Supplier deleted successfully');
     } catch (error) {
-      console.warn('Failed to delete supplier:', error);
-      throw error;
+      console.error('Failed to delete supplier:', error);
+      
+      // If it's a database connection error, try to reinitialize
+      if (error instanceof Error && (
+        error.message.includes('NullPointerException') || 
+        error.message.includes('prepareAsync') || 
+        error.message.includes('database') ||
+        error.message.includes('connection')
+      )) {
+        console.log('Database connection issue detected during delete, reinitializing...');
+        this.isInitialized = false;
+        this.db = null;
+        this.initPromise = null;
+        
+        try {
+          await this.initDatabase();
+          console.log('Database reinitialized, retrying supplier delete...');
+          // Retry the operation once after reinitializing
+          return this.deleteSupplier(id);
+        } catch (retryError) {
+          console.error('Delete retry failed:', retryError);
+          throw new Error(`Failed to delete supplier after retry: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`);
+        }
+      }
+      
+      throw new Error(`Failed to delete supplier: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -584,16 +747,23 @@ class DatabaseService {
       
       if (this.db) {
         try {
+          // Drop all tables to ensure clean schema
+          await this.db.execAsync('DROP TABLE IF EXISTS suppliers;');
+          await this.db.execAsync('DROP TABLE IF EXISTS products;');
+          await this.db.execAsync('DROP TABLE IF EXISTS cart_items;');
+          await this.db.execAsync('DROP TABLE IF EXISTS sales;');
+          console.log('All tables dropped');
+          
           await this.db.closeAsync();
           console.log('Database connection closed');
         } catch (e) {
-          console.warn('Error closing database during reset:', e);
+          console.warn('Error during database cleanup:', e);
         }
         this.db = null;
       }
       
-      // Wait a bit for cleanup
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Wait for cleanup
+      await new Promise(resolve => setTimeout(resolve, 300));
       
       try {
         await SQLite.deleteDatabaseAsync(DB_NAME);
@@ -603,7 +773,7 @@ class DatabaseService {
       }
       
       // Wait a bit more
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 300));
       
       // Reinitialize
       await this.initDatabase();

@@ -192,9 +192,9 @@ export default function SupplierOrderScreen() {
     if (!supplier || cart.length === 0) return;
     
     try {
-      // Create order message
-      const orderItems = cart.map(item => `• ${item.name} - Qty: ${item.qty} - ₹${(item.qty * item.price).toFixed(2)}`).join('\n');
-      const message = `Hello ${supplier.name},\n\nI would like to place an order:\n\n${orderItems}\n\nTotal: ₹${total.toFixed(2)}\n\nPlease confirm availability and delivery details.\n\nThank you!`;
+      // Create order message without prices
+      const orderItems = cart.map(item => `• ${item.name} - Qty: ${item.qty}`).join('\n');
+      const message = `Hello ${supplier.name},\n\nI would like to place an order:\n\n${orderItems}\n\nPlease confirm availability and delivery details.\n\nThank you!`;
       
       const encodedMessage = encodeURIComponent(message);
       const whatsappUrl = `whatsapp://send?phone=${supplier.whatsappNumber}&text=${encodedMessage}`;

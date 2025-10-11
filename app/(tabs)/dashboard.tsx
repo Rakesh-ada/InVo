@@ -239,7 +239,7 @@ export default function DashboardScreen() {
                 label="Items Sold" 
                 value={isLoading ? "..." : weeklyItemsSold.toLocaleString()} 
                 deltaLabel="" 
-                deltaColor="#22C55E" 
+                deltaColor="#3B82F6" 
               />
             </View>
 
