@@ -4,7 +4,7 @@ import { Colors } from '@/constants/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Dimensions, Image, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -15,6 +15,8 @@ export default function OnboardingScreen() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [profileName, setProfileName] = useState('');
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [businessName, setBusinessName] = useState('');
+  const [qrPaymentImage, setQrPaymentImage] = useState<string | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -51,17 +53,38 @@ export default function OnboardingScreen() {
     }
   };
 
+  const pickQrPaymentImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant photo library access.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets && result.assets[0]) {
+        setQrPaymentImage(result.assets[0].uri);
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to select image');
+    }
+  };
+
   const completeOnboarding = async () => {
     try {
       // Save profile data if provided
       if (profileName.trim()) {
         const initialSettings = {
           profileName: profileName.trim(),
-          businessName: 'My Business',
+          businessName: businessName.trim() || 'My Business',
           isDarkMode: true,
           autoSync: false,
           profileImageUri: profileImage,
-          qrPaymentImageUri: null,
+          qrPaymentImageUri: qrPaymentImage,
         };
         await AsyncStorage.setItem('@invo_settings', JSON.stringify(initialSettings));
       }
@@ -115,14 +138,18 @@ export default function OnboardingScreen() {
             <View style={styles.content}>
               <View style={styles.logoContainer}>
                 <View style={styles.logoCircle}>
-                  <IconSymbol name="cube.fill" size={40} color="#3B82F6" />
+                  <Image 
+                    source={require('@/assets/images/iconcirc.png')} 
+                    style={styles.logoImage} 
+                    resizeMode="contain" 
+                  />
                 </View>
               </View>
               <ThemedText type="title" style={styles.title}>
                 Welcome to InVo
               </ThemedText>
               <ThemedText style={styles.subtitle}>
-                Your complete inventory and invoicing solution for small businesses
+                Effortless Inventory Mastery 🚀
               </ThemedText>
             </View>
           </View>
@@ -136,7 +163,7 @@ export default function OnboardingScreen() {
                 </ThemedText>
                 
                 <ThemedText style={styles.profileSetupSubtitle}>
-                  Let's personalize your experience
+                  Let's Personalize Your Experience
                 </ThemedText>
               </View>
               
@@ -166,33 +193,67 @@ export default function OnboardingScreen() {
                   value={profileName}
                   onChangeText={setProfileName}
                   style={styles.nameInput}
-                  placeholder="Enter your name"
+                  placeholder="Enter Your Name"
                   placeholderTextColor="#6B7280"
                 />
                 
                 <ThemedText style={styles.instructionText}>
-                  This will be displayed in your profile and reports
+                  This will be displayed in your settings
                 </ThemedText>
               </View>
             </View>
           </View>
 
-          {/* Slide 3: Get Started */}
+          {/* Slide 3: Business Setup */}
           <View style={styles.slide}>
-            <View style={styles.content}>
-              <View style={styles.logoContainer}>
-                <View style={styles.logoCircle}>
-                  <IconSymbol name="forward.fill" size={40} color="#FF9800" />
-                </View>
+            <View style={styles.businessSetupContent}>
+              <View style={styles.headerSection}>
+                <ThemedText type="title" style={styles.businessSetupTitle}>
+                  Business Setup
+                </ThemedText>
+                
+                <ThemedText style={styles.businessSetupSubtitle}>
+                  Let's set up Your Business Profile
+                </ThemedText>
               </View>
-              <ThemedText type="title" style={styles.title}>
-                Ready to Start?
-              </ThemedText>
-              <ThemedText style={styles.subtitle}>
-                Set up your business profile and start managing your inventory like a pro
-              </ThemedText>
+              
+              <View style={styles.qrSection}>
+                <TouchableOpacity 
+                  style={styles.qrImageContainer} 
+                  onPress={pickQrPaymentImage}
+                  activeOpacity={0.8}
+                >
+                  {qrPaymentImage ? (
+                    <Image 
+                      source={{ uri: qrPaymentImage }} 
+                      style={styles.qrImageImg} 
+                      resizeMode="cover" 
+                    />
+                  ) : (
+                    <View style={styles.qrImagePlaceholder}>
+                      <IconSymbol name="qrcode" size={60} color="#9BA1A6" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <ThemedText style={styles.addQrText}>Tap to add QR code</ThemedText>
+              </View>
+              
+              <View style={styles.businessNameInputContainer}>
+                <TextInput
+                  value={businessName}
+                  onChangeText={setBusinessName}
+                  style={styles.businessNameInput}
+                  placeholder="Enter Business Name"
+                  placeholderTextColor="#6B7280"
+                />
+                
+                <ThemedText style={styles.instructionText}>
+                  This will be displayed on your settings
+                </ThemedText>
+              </View>
             </View>
           </View>
+
         </ScrollView>
 
         {/* Navigation Controls */}
@@ -209,7 +270,7 @@ export default function OnboardingScreen() {
             ))}
           </View>
           
-          <View style={styles.buttonContainer}>
+          <View style={[styles.buttonContainer, currentSlide === 0 && styles.centeredButtonContainer]}>
             {currentSlide > 0 && (
               <TouchableOpacity
                 style={styles.backButton}
@@ -224,7 +285,7 @@ export default function OnboardingScreen() {
               onPress={nextSlide}
             >
               <ThemedText style={styles.getStartedButtonText}>
-                {currentSlide === 2 ? 'Get Started' : 'Next'}
+                {currentSlide === 0 ? "Let's GO!" : currentSlide === 2 ? 'Get Started' : 'Next'}
               </ThemedText>
             </TouchableOpacity>
           </View>
@@ -267,6 +328,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#3B82F6',
+  },
+  logoImage: {
+    width: 90,
+    height: 90,
   },
   title: {
     fontSize: 28,
@@ -322,6 +387,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  centeredButtonContainer: {
+    justifyContent: 'center',
+  },
   backButton: {
     paddingHorizontal: 24,
     paddingVertical: 12,
@@ -334,10 +402,8 @@ const styles = StyleSheet.create({
   getStartedButton: {
     backgroundColor: '#3B82F6',
     paddingHorizontal: 32,
-    paddingVertical: 16,
+    paddingVertical: 12,
     borderRadius: 25,
-    flex: 1,
-    marginLeft: 16,
     alignItems: 'center',
   },
   getStartedButtonText: {
@@ -403,15 +469,13 @@ const styles = StyleSheet.create({
   },
   nameInput: {
     width: '100%',
-    fontSize: 18,
+    fontSize: 20,
     color: '#FFFFFF',
     backgroundColor: 'transparent',
     paddingHorizontal: 0,
     paddingVertical: 12,
     textAlign: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: '#3B82F6',
-    marginBottom: 16,
+    marginBottom: 25,
   },
   instructionText: {
     fontSize: 14,
@@ -419,4 +483,68 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
+  businessSetupContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    maxWidth: 300,
+  },
+  businessSetupTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 0,
+  },
+  businessSetupSubtitle: {
+    fontSize: 16,
+    color: '#9BA1A6',
+    textAlign: 'center',
+  },
+  qrSection: {
+    alignItems: 'center',
+    marginBottom: 50,
+  },
+  qrImageContainer: {
+    width: 160,
+    height: 160,
+    borderRadius: 16,
+    backgroundColor: '#2A2A2A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#3B82F6',
+    marginBottom: 12,
+  },
+  qrImageImg: {
+    width: 160,
+    height: 160,
+    borderRadius: 16,
+  },
+  qrImagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addQrText: {
+    fontSize: 12,
+    color: '#9BA1A6',
+    textAlign: 'center',
+  },
+  businessNameInputContainer: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  businessNameInput: {
+    width: '100%',
+    fontSize: 20,
+    color: '#FFFFFF',
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
+    paddingVertical: 12,
+    textAlign: 'center',
+    marginBottom: 25,
+  },
 });
+
+
