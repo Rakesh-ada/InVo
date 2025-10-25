@@ -611,12 +611,10 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
   typingContainer: {
-    backgroundColor: '#2A2A2A',
+    backgroundColor: 'transparent',
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#3A3A3A',
   },
   typingText: {
     color: '#9BA1A6',

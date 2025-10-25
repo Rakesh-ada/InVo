@@ -1,5 +1,9 @@
 # InVo - Advanced Inventory Management System 🚀
 
+[![Download Latest](https://img.shields.io/badge/Download-Latest%20Release-blue?style=for-the-badge&logo=github)](https://github.com/yourusername/InVo/releases/latest)
+[![Android APK](https://img.shields.io/badge/Android-APK%20Download-green?style=for-the-badge&logo=android)](https://github.com/yourusername/InVo/releases/latest/download/invo-android.apk)
+[![Expo](https://img.shields.io/badge/Expo-Try%20Now-black?style=for-the-badge&logo=expo)](https://expo.dev/@yourusername/invo)
+
 **InVo** is a comprehensive, AI-powered inventory management application built with React Native and Expo. It provides businesses with intelligent inventory tracking, sales analytics, supplier management, and AI-driven insights to optimize operations and maximize profitability.
 
 ## 🌟 Key Features
@@ -94,6 +98,17 @@
 - **👥 Suppliers**: Supplier management and order tracking
 - **📊 Weekly Report**: Comprehensive business analytics
 - **📱 Onboarding**: First-time user setup and configuration
+
+## 📱 **Download & Install**
+
+### **Pre-built Applications**
+- **Android APK**: [Download Latest APK](https://github.com/yourusername/InVo/releases/latest/download/invo-android.apk)
+- **iOS App**: [Download from App Store](https://apps.apple.com/app/invo-inventory-management) *(Coming Soon)*
+- **Expo Go**: [Try in Expo Go](https://expo.dev/@yourusername/invo)
+
+### **Direct Downloads**
+- **Latest Release**: [Download v1.0.0](https://github.com/yourusername/InVo/releases/latest)
+- **All Releases**: [View All Downloads](https://github.com/yourusername/InVo/releases)
 
 ## 🚀 **Getting Started**
 
