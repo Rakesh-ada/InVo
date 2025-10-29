@@ -9,7 +9,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Animated, FlatList, Image, Modal, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import smsPaymentMonitor from '@/services/sms-payment-monitor';
 
 type CartItem = { id: string; name: string; qty: number; price: number };
 
@@ -225,19 +224,6 @@ export default function ExploreScreen() {
     fadeAnim.setValue(1);
     successScaleAnim.setValue(0);
     successRotateAnim.setValue(0);
-    
-    // Start SMS monitoring for payment
-    const monitoringStarted = await smsPaymentMonitor.startMonitoring(
-      total,
-      (payment) => {
-        console.log('Payment detected:', payment);
-        handlePaymentDetected();
-      }
-    );
-    
-    if (!monitoringStarted) {
-      console.log('SMS monitoring not available or permissions denied');
-    }
   };
 
   const handlePaymentComplete = async () => {
@@ -325,7 +311,6 @@ export default function ExploreScreen() {
   };
 
   const handlePaymentCancel = () => {
-    smsPaymentMonitor.stopMonitoring();
     setIsPaymentModalVisible(false);
     setPaymentSuccess(false);
   };

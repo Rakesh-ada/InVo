@@ -21,11 +21,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.rakeshlord.InVo",
-      "permissions": [
-        "READ_SMS",
-        "RECEIVE_SMS"
-      ]
+      "package": "com.rakeshlord.InVo"
     },
     "web": {
       "output": "static",
