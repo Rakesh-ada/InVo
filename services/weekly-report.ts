@@ -56,9 +56,9 @@ class WeeklyReportService {
       revenue: Math.round((Math.random() * 2000 + 500))
     }));
 
-    // Filter stock alerts
-    const lowStockAlerts = products.filter(p => p.quantity <= 5 && p.quantity > 0);
-    const outOfStockItems = products.filter(p => p.quantity === 0);
+    // Filter stock alerts - limit to top 20 of each for performance
+    const lowStockAlerts = products.filter(p => p.quantity <= 5 && p.quantity > 0).slice(0, 20);
+    const outOfStockItems = products.filter(p => p.quantity === 0).slice(0, 20);
 
     return {
       totalSales,
@@ -273,21 +273,21 @@ class WeeklyReportService {
           <h2>⚠️ Inventory Alerts</h2>
           <h3 style="color: #dc2626; margin-top: 20px;">Out of Stock (${weeklyData.outOfStockItems.length})</h3>
           ${weeklyData.outOfStockItems.length > 0 ? 
-            weeklyData.outOfStockItems.map(item => `
+            weeklyData.outOfStockItems.slice(0, 15).map(item => `
               <div class="alert-item">
                 <strong>${item.name}</strong> - Completely out of stock
               </div>
-            `).join('') : 
+            `).join('') + (weeklyData.outOfStockItems.length > 15 ? `<div style="text-align: center; color: #666; padding: 10px; font-style: italic;">... and ${weeklyData.outOfStockItems.length - 15} more items</div>` : '') : 
             '<div class="no-items">✅ No out of stock items</div>'
           }
           
           <h3 style="color: #f59e0b; margin-top: 25px;">Low Stock (${weeklyData.lowStockAlerts.length})</h3>
           ${weeklyData.lowStockAlerts.length > 0 ? 
-            weeklyData.lowStockAlerts.map(item => `
+            weeklyData.lowStockAlerts.slice(0, 15).map(item => `
               <div class="alert-item low-stock">
                 <strong>${item.name}</strong> - Only ${item.quantity} units remaining
               </div>
-            `).join('') : 
+            `).join('') + (weeklyData.lowStockAlerts.length > 15 ? `<div style="text-align: center; color: #666; padding: 10px; font-style: italic;">... and ${weeklyData.lowStockAlerts.length - 15} more items</div>` : '') : 
             '<div class="no-items">✅ No low stock items</div>'
           }
         </div>

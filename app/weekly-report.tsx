@@ -395,7 +395,7 @@ export default function WeeklyReportScreen() {
           {weeklyData && (
             <>
               <View style={styles.summaryCard}>
-                <ThemedText style={styles.cardTitle}>This Week's Summary</ThemedText>
+<ThemedText style={styles.cardTitle}>This Week{"'"}s Summary</ThemedText>
                 <View style={styles.metricsRow}>
                   <View style={styles.metric}>
                     <ThemedText style={styles.metricValue}>₹{weeklyData.totalRevenue.toLocaleString()}</ThemedText>

@@ -1,5 +1,6 @@
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { SearchIcon } from '@/components/ui/search-icon';
 import { Colors } from '@/constants/theme';
 import { dbService, Product } from '@/services/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -71,9 +72,6 @@ function ProductRow({ product, onMeasure, onPress }: ProductRowProps & { onPress
         <View style={styles.rowContent}>
           <ThemedText style={styles.rowTitle}>{product.name}</ThemedText>
           <View style={styles.rowDetails}>
-            <ThemedText style={[styles.rowDetailQuantity, product.quantity === 0 && styles.outOfStock]}>
-              {product.quantity === 0 ? 'OUT OF STOCK' : `QTY ${product.quantity}`}
-            </ThemedText>
             <ThemedText style={styles.rowDetailPrice}>₹{product.sellingPrice}</ThemedText>
           </View>
         </View>
@@ -107,6 +105,7 @@ type FormData = {
   buyingPriceInput: string;
   sellingPriceInput: string;
   quantityInput: string;
+  unitInput: string;
   expiryDateInput: string;
   selectedImage: string | null;
 };
@@ -116,12 +115,15 @@ export default function ProductsScreen() {
   const isDark = true;
   const bg = Colors.dark.background;
 
+  const UNIT_OPTIONS = ['pc','kg','g','lt','ml','box','pkt','set'];
+
   const [products, setProducts] = useState<Product[]>([]);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [buyingPriceInput, setBuyingPriceInput] = useState('');
   const [sellingPriceInput, setSellingPriceInput] = useState('');
   const [quantityInput, setQuantityInput] = useState('');
+  const [unitInput, setUnitInput] = useState('pc');
   const [expiryDateInput, setExpiryDateInput] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [measuredRowHeight, setMeasuredRowHeight] = useState<number | null>(null);
@@ -141,6 +143,7 @@ export default function ProductsScreen() {
         buyingPriceInput,
         sellingPriceInput,
         quantityInput,
+        unitInput,
         expiryDateInput,
         selectedImage,
       };
@@ -148,7 +151,7 @@ export default function ProductsScreen() {
     } catch (error) {
       console.warn('Failed to save form data:', error);
     }
-  }, [nameInput, buyingPriceInput, sellingPriceInput, quantityInput, expiryDateInput, selectedImage]);
+  }, [nameInput, buyingPriceInput, sellingPriceInput, quantityInput, unitInput, expiryDateInput, selectedImage]);
 
   const loadFormData = useCallback(async () => {
     try {
@@ -161,6 +164,7 @@ export default function ProductsScreen() {
         setBuyingPriceInput(formData.buyingPriceInput || '');
         setSellingPriceInput(formData.sellingPriceInput || '');
         setQuantityInput(formData.quantityInput || '');
+        setUnitInput(formData.unitInput || 'pc');
         setExpiryDateInput(formData.expiryDateInput || '');
         setSelectedImage(formData.selectedImage || null);
       }
@@ -300,7 +304,7 @@ export default function ProductsScreen() {
     if (isAddOpen) {
       saveFormData();
     }
-  }, [nameInput, buyingPriceInput, sellingPriceInput, quantityInput, expiryDateInput, selectedImage, isAddOpen, saveFormData]);
+  }, [nameInput, buyingPriceInput, sellingPriceInput, quantityInput, unitInput, expiryDateInput, selectedImage, isAddOpen, saveFormData]);
 
   useFocusEffect(
     useCallback(() => {
@@ -317,6 +321,7 @@ export default function ProductsScreen() {
     setSellingPriceInput('');
     setQuantityInput('');
     setExpiryDateInput('');
+    setUnitInput('pc');
     setSelectedImage(null);
     
     // Clear saved form data
@@ -385,6 +390,7 @@ export default function ProductsScreen() {
         buyingPrice,
         sellingPrice,
         quantity,
+        unit: unitInput,
         expiryDate: expiryDateInput || new Date().toISOString().split('T')[0],
         imageUri: selectedImage || undefined,
       });
@@ -398,6 +404,7 @@ export default function ProductsScreen() {
         buyingPrice,
         sellingPrice,
         quantity,
+        unit: unitInput,
         expiryDate: expiryISO,
         imageUri: selectedImage || undefined,
       });
@@ -451,7 +458,7 @@ export default function ProductsScreen() {
             </TouchableOpacity>
             )}
             <TouchableOpacity style={styles.headerButton} onPress={toggleSearch}>
-              <IconSymbol name="magnifyingglass" size={24} color="#FFFFFF" />
+              <SearchIcon size={24} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </View>
@@ -586,6 +593,19 @@ export default function ProductsScreen() {
                     </View>
                   </View>
                 </View>
+                
+                {/* Unit selection */}
+                <View>
+                  <ThemedText style={styles.inputLabel} darkColor="#9BA1A6">Unit</ThemedText>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {UNIT_OPTIONS.map(u => (
+                      <TouchableOpacity key={u} onPress={() => setUnitInput(u)} style={[styles.unitChip, unitInput === u && styles.unitChipActive]}>
+                        <ThemedText style={[styles.unitChipText, unitInput === u && styles.unitChipTextActive]}>{u}</ThemedText>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+                
                 {isDatePickerOpen && (
                   <View style={{ marginTop: 8 }}>
                     <DateTimePicker
@@ -804,17 +824,18 @@ const styles = StyleSheet.create({
   rowDetailQuantity: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#3B82F6',
+    color: '#9BA1A6',
     marginRight: 12,
   },
   outOfStock: {
-    color: '#EF4444',
+    color: '#9BA1A6',
     fontWeight: '700',
+    opacity: 0.6,
   },
   rowDetailPrice: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#22C55E',
+    color: '#9BA1A6',
     marginRight: 12,
   },
   rowDetailText: {
@@ -898,6 +919,26 @@ const styles = StyleSheet.create({
   imagePlaceholderText: {
     fontSize: 12,
     marginTop: 4,
+  },
+  unitChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#2A2A2A',
+    borderWidth: 1,
+    borderColor: '#3A3A3A',
+  },
+  unitChipActive: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
+  },
+  unitChipText: {
+    fontSize: 12,
+    color: '#9BA1A6',
+  },
+  unitChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   searchContainer: {
     flexDirection: 'row',

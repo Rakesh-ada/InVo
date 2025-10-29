@@ -3,7 +3,12 @@ import React from 'react';
 import { Image, useWindowDimensions } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
+import { AnimatedTabIcon } from '@/components/animated-tab-icon';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { HomeIcon } from '@/components/ui/home-icon';
+import { ProductsIcon } from '@/components/ui/products-icon';
+import { CartIcon } from '@/components/ui/cart-icon';
+import { SettingsIcon } from '@/components/ui/settings-icon';
 import { Colors } from '@/constants/theme';
 import { TabBarProvider, useTabBar } from '@/contexts/TabBarContext';
 
@@ -51,9 +56,12 @@ function TabLayoutContent() {
         tabBarButton: HapticTab,
         tabBarItemStyle: {
           marginHorizontal: 5,
+          justifyContent: 'center',
+          alignItems: 'center',
         },
         tabBarIconStyle: {
           marginBottom: 0,
+          marginTop: 0,
         },
         tabBarHideOnKeyboard: true,
       }}>
@@ -61,26 +69,32 @@ function TabLayoutContent() {
         name="dashboard"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={30} name="house.fill" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <AnimatedTabIcon focused={focused}>
+              <HomeIcon size={28} color={color} />
+            </AnimatedTabIcon>
+          ),
         }}
       />
       <Tabs.Screen
         name="products"
         options={{
           title: 'Products',
-          tabBarIcon: ({ color }) => <IconSymbol size={30} name="cube.fill" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <AnimatedTabIcon focused={focused}>
+              <ProductsIcon size={28} color={color} />
+            </AnimatedTabIcon>
+          ),
         }}
       />
       <Tabs.Screen
         name="explore"
         options={{
           title: 'Explore',
-          tabBarIcon: ({ color }) => (
-            <Image
-              source={require('@/assets/images/cart.png')}
-              style={{ width: 30, height: 30, tintColor: color }}
-              resizeMode="contain"
-            />
+          tabBarIcon: ({ color, focused }) => (
+            <AnimatedTabIcon focused={focused}>
+              <CartIcon size={28} color={color} />
+            </AnimatedTabIcon>
           ),
         }}
       />
@@ -88,12 +102,10 @@ function TabLayoutContent() {
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ color }) => (
-            <Image
-              source={require('@/assets/images/setting.png')}
-              style={{ width: 30, height: 30, tintColor: color }}
-              resizeMode="contain"
-            />
+          tabBarIcon: ({ color, focused }) => (
+            <AnimatedTabIcon focused={focused}>
+              <SettingsIcon size={28} color={color} />
+            </AnimatedTabIcon>
           ),
         }}
       />

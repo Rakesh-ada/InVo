@@ -8,6 +8,7 @@ export type Product = {
   buyingPrice: number; 
   sellingPrice: number; 
   quantity: number; 
+  unit: string; 
   expiryDate: string; 
   imageUri?: string; 
   addedDate: string;
@@ -149,9 +150,7 @@ class DatabaseService {
     try {
       console.log('Creating database tables...');
       
-      // Drop and recreate suppliers table to ensure correct schema
-      await this.db.execAsync('DROP TABLE IF EXISTS suppliers;');
-      console.log('Dropped existing suppliers table');
+      // Ensure suppliers table exists without dropping existing data
       
       // Create products table
       await this.db.execAsync(`
@@ -161,12 +160,25 @@ class DatabaseService {
           buyingPrice REAL NOT NULL,
           sellingPrice REAL NOT NULL,
           quantity INTEGER NOT NULL,
+          unit TEXT NOT NULL DEFAULT 'pc',
           expiryDate TEXT NOT NULL,
           imageUri TEXT,
           addedDate TEXT NOT NULL
         );
       `);
       console.log('Products table created');
+
+      // Migration: ensure "unit" column exists (for older databases)
+      try {
+        const columns: Array<{ name: string }> = await this.db.getAllAsync("PRAGMA table_info(products)");
+        const hasUnit = columns.some(c => c.name === 'unit');
+        if (!hasUnit) {
+          await this.db.execAsync("ALTER TABLE products ADD COLUMN unit TEXT NOT NULL DEFAULT 'pc'");
+          console.log('Migrated products table: added unit column');
+        }
+      } catch (e) {
+        console.warn('Failed to verify/migrate unit column:', e);
+      }
       
       // Create indexes for better performance
       await this.db.execAsync(`
@@ -200,7 +212,7 @@ class DatabaseService {
 
       // Create suppliers table with correct schema
       await this.db.execAsync(`
-        CREATE TABLE suppliers (
+        CREATE TABLE IF NOT EXISTS suppliers (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
           phoneNumber TEXT NOT NULL,
@@ -246,20 +258,20 @@ class DatabaseService {
       throw new Error('Database not available');
     }
 
-    try {
-      let query = 'SELECT * FROM products ORDER BY addedDate DESC';
-      const params: any[] = [];
+    let query = 'SELECT * FROM products ORDER BY addedDate DESC';
+    const params: any[] = [];
+    
+    if (limit !== undefined) {
+      query += ' LIMIT ?';
+      params.push(limit);
       
-      if (limit !== undefined) {
-        query += ' LIMIT ?';
-        params.push(limit);
-        
-        if (offset !== undefined) {
-          query += ' OFFSET ?';
-          params.push(offset);
-        }
+      if (offset !== undefined) {
+        query += ' OFFSET ?';
+        params.push(offset);
       }
-      
+    }
+    
+    try {
       const result = await this.db.getAllAsync(query, params);
       return result.map((row: any) => ({
         id: row.id,
@@ -267,6 +279,7 @@ class DatabaseService {
         buyingPrice: row.buyingPrice,
         sellingPrice: row.sellingPrice,
         quantity: row.quantity,
+        unit: row.unit || 'pc',
         expiryDate: row.expiryDate,
         imageUri: row.imageUri,
         addedDate: row.addedDate
@@ -316,9 +329,9 @@ class DatabaseService {
       }
 
       // Use a prepared statement for better performance and safety
-      const result = await this.db.runAsync(
-        'INSERT INTO products (id, name, buyingPrice, sellingPrice, quantity, expiryDate, imageUri, addedDate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [id, product.name.trim(), product.buyingPrice, product.sellingPrice, product.quantity, product.expiryDate, product.imageUri || null, addedDate]
+      await this.db.runAsync(
+        'INSERT INTO products (id, name, buyingPrice, sellingPrice, quantity, unit, expiryDate, imageUri, addedDate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [id, product.name.trim(), product.buyingPrice, product.sellingPrice, product.quantity, (product.unit || 'pc'), product.expiryDate, product.imageUri || null, addedDate]
       );
       
       console.log('Product added successfully with ID:', id);
@@ -356,8 +369,8 @@ class DatabaseService {
 
     try {
       await this.db.runAsync(
-        'UPDATE products SET name = ?, buyingPrice = ?, sellingPrice = ?, quantity = ?, expiryDate = ?, imageUri = ? WHERE id = ?',
-        [product.name, product.buyingPrice, product.sellingPrice, product.quantity, product.expiryDate, product.imageUri || null, product.id]
+        'UPDATE products SET name = ?, buyingPrice = ?, sellingPrice = ?, quantity = ?, unit = ?, expiryDate = ?, imageUri = ? WHERE id = ?',
+        [product.name, product.buyingPrice, product.sellingPrice, product.quantity, (product.unit || 'pc'), product.expiryDate, product.imageUri || null, product.id]
       );
     } catch (error) {
       console.warn('Failed to update product:', error);
@@ -426,6 +439,7 @@ class DatabaseService {
         buyingPrice: row.buyingPrice,
         sellingPrice: row.sellingPrice,
         quantity: row.quantity,
+        unit: row.unit || 'pc',
         expiryDate: row.expiryDate,
         imageUri: row.imageUri,
         addedDate: row.addedDate
@@ -502,8 +516,8 @@ class DatabaseService {
           ids.push(id);
           
           await this.db!.runAsync(
-            'INSERT INTO products (id, name, buyingPrice, sellingPrice, quantity, expiryDate, imageUri, addedDate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [id, product.name.trim(), product.buyingPrice, product.sellingPrice, product.quantity, product.expiryDate, product.imageUri || null, addedDate]
+            'INSERT INTO products (id, name, buyingPrice, sellingPrice, quantity, unit, expiryDate, imageUri, addedDate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [id, product.name.trim(), product.buyingPrice, product.sellingPrice, product.quantity, (product.unit || 'pc'), product.expiryDate, product.imageUri || null, addedDate]
           );
         }
       });

@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dbService, Product } from './database';
+import { vectorStoreService } from './vector-store';
+import { analyticsCacheService } from './analytics-cache';
 
 export interface ChatMessage {
   id: string;
@@ -39,6 +41,10 @@ class GeminiService {
       throw new Error('Gemini API key not configured');
     }
 
+    // Initialize vector store for semantic search
+    await vectorStoreService.initialize();
+    console.log('✅ Vector store initialized');
+
     const businessContext = await this.getComprehensiveBusinessContext();
     
     const contextMessage = `You are InVo AI - Advanced Inventory Intelligence Assistant
@@ -68,6 +74,13 @@ COMMUNICATION STYLE:
 - Focus on practical business solutions
 - Provide specific recommendations with data backing
 
+IMPORTANT LIMITATIONS:
+- You are READ-ONLY - you cannot add, edit, or delete products/suppliers
+- You cannot change any data in the database
+- If users ask to change/edit/add/delete, inform them they need to use the app's main interface
+- Focus on providing information, insights, and recommendations only
+- Never ask "what would you like to change/update" - you cannot make changes
+
 Ready to help optimize your inventory and boost business performance! What would you like to analyze?`;
 
     this.chatHistory = [];
@@ -80,29 +93,53 @@ Ready to help optimize your inventory and boost business performance! What would
 
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
-      // Get comprehensive business intelligence
-      const businessContext = await this.getComprehensiveBusinessContext();
-      const analytics = await this.generateInventoryAnalytics();
+      // Use semantic search to find relevant context (RAG)
+      const relevantContext = await vectorStoreService.getRelevantContext(message, 3);
+      console.log('🔍 Retrieved relevant context via semantic search');
+      
+      // Get cached analytics (reduces DB queries)
+      const cachedAnalytics = await analyticsCacheService.getAnalytics();
+      const todaySales = await dbService.getTodaysSalesTotal();
+      
+      // Only fetch specific data based on query type
+      const queryType = this.detectQueryType(message);
+      const specificContext = await this.getSpecificContext(queryType);
+      
       const chatContext = this.getRecentChatContext();
       
-      const enhancedPrompt = `${businessContext}
+      const enhancedPrompt = `RELEVANT DATA (Semantic Search):
+${relevantContext}
 
-REAL-TIME ANALYTICS:
-${this.formatAnalytics(analytics)}
+${specificContext}
 
-${chatContext ? `RECENT CONVERSATION CONTEXT:\n${chatContext}\n\n` : ''}USER QUERY: "${message}"
+CACHED ANALYTICS:
+• Products: ${cachedAnalytics.totalProducts} | Stock: ${cachedAnalytics.totalStock} | Value: ₹${Math.round(cachedAnalytics.totalValue)}
+• Low Stock: ${cachedAnalytics.lowStockCount} | Out of Stock: ${cachedAnalytics.outOfStockCount}
+• Stock Health: ${cachedAnalytics.stockHealth}
+• Today's Sales: ₹${todaySales.totalAmount}
+
+${chatContext ? `RECENT CONTEXT:\n${chatContext}\n\n` : ''}USER QUERY: "${message}"
 
 INSTRUCTIONS:
 - Keep responses ULTRA-CONCISE (2-3 sentences max) but information-dense
-- Use compact bullet points (•) with minimal text - just key facts and numbers
-- Include specific metrics in shortest form (e.g., "5 units" not "Stock: 5 units")
-- Highlight urgent actions with ⚠️ and opportunities with 💡
-- ALWAYS end with 1-2 targeted follow-up questions to continue conversation
-- Use abbreviations where clear (e.g., "WoW" for week-over-week)
-- Focus on actionable insights only - cut fluff
-- Use emojis for visual scanning (📊 📈 ⚠️ 💡 ✅)
-- Format: Brief answer → Key data points → Follow-up question
-- For pricing queries: Use Google Search to find current market prices and compare with inventory prices
+- Use emojis STRATEGICALLY to highlight key points, not on every line
+- Use emojis for: urgent issues (⚠️🔴), opportunities (💡✅), metrics (📊💰), status (🟢🟡🔴)
+- NEVER use asterisks (*) or dashes (-) for lists
+- Example format:
+  ⚠️ Low stock on 3 items
+  Today's sales: ₹500 from 5 transactions
+  💡 Consider restocking Rice and Flour
+- Write naturally - use emojis to draw attention, not decoration
+- Include specific metrics in shortest form
+- ALWAYS end with 1-2 targeted follow-up questions
+- For pricing queries: Use Google Search to find current market prices
+
+CRITICAL - READ-ONLY MODE:
+- You CANNOT add, edit, delete, or modify any data
+- If user asks to change/add/delete: say "I can only provide information. To make changes, please use the Products or Suppliers section in the app."
+- Never ask "what would you like to change" or suggest you can make edits
+- Focus only on: viewing data, providing insights, answering questions, making recommendations
+`;
 
       // Build conversation history for context
       const contents = [
@@ -159,7 +196,10 @@ INSTRUCTIONS:
         throw new Error('Invalid response structure from Gemini API');
       }
 
-      let aiResponse = data.candidates[0].content.parts[0].text;
+      const firstPart = data.candidates[0].content.parts[0];
+      
+
+      let aiResponse = firstPart.text || '';
       
       // Remove bold markdown formatting (**text**)
       aiResponse = aiResponse.replace(/\*\*(.*?)\*\*/g, '$1');
@@ -216,6 +256,17 @@ INSTRUCTIONS:
 
       const todaySales = await dbService.getTodaysSalesTotal();
       
+      // Format supplier info
+      const supplierInfo = suppliers.length > 0 
+        ? suppliers.slice(0, 5).map(s => `• ${s.name}: ${s.phoneNumber}${s.email ? ` (${s.email})` : ''}`).join('\n')
+        : '• No suppliers added yet';
+      
+      // Check for expiring products
+      const expiringProducts = this.getExpiringProducts(products);
+      const expiryInfo = expiringProducts.length > 0 
+        ? `\n⚠️ Expiring Soon: ${expiringProducts.slice(0, 3).map(p => `${p.name} (${p.expiryDate})`).join(', ')}`
+        : '';
+      
       return `📊 BUSINESS OVERVIEW (${settings.businessName || 'Your Business'}):
 Products: ${products.length} | Suppliers: ${suppliers.length}
 Today's Sales: ₹${todaySales.totalAmount} (${todaySales.totalItems} items)
@@ -224,7 +275,10 @@ Inventory Value: ₹${this.calculateInventoryValue(products)}
 📦 STOCK STATUS:
 Low Stock (≤5): ${this.getLowStockItems(products).length} items
 Out of Stock: ${this.getOutOfStockItems(products).length} items
-Top Products: ${this.getTopProducts(products).join(', ')}
+Top Products: ${this.getTopProducts(products).join(', ')}${expiryInfo}
+
+👥 SUPPLIERS (${suppliers.length} total):
+${supplierInfo}
 
 💰 PROFITABILITY:
 Avg Margin: ${this.calculateAverageMargin(products)}%
@@ -300,6 +354,26 @@ High Margin Items: ${this.getHighMarginProducts(products).join(', ')}`;
 
   private getOutOfStockItems(products: Product[]): Product[] {
     return products.filter(p => p.quantity === 0);
+  }
+
+  private getExpiringProducts(products: Product[]): Product[] {
+    const now = new Date();
+    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    
+    return products.filter(p => {
+      if (!p.expiryDate || !p.expiryDate.trim()) return false;
+      
+      try {
+        const expiryDate = new Date(p.expiryDate);
+        return expiryDate <= thirtyDaysFromNow && expiryDate >= now;
+      } catch {
+        return false;
+      }
+    }).sort((a, b) => {
+      const dateA = new Date(a.expiryDate);
+      const dateB = new Date(b.expiryDate);
+      return dateA.getTime() - dateB.getTime();
+    });
   }
 
   private getTopProducts(products: Product[]): string[] {
@@ -423,6 +497,156 @@ High Margin Items: ${this.getHighMarginProducts(products).join(', ')}`;
     return recentMessages
       .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content.substring(0, 150)}${msg.content.length > 150 ? '...' : ''}`)
       .join('\n');
+  }
+
+  private detectQueryType(query: string): 'product' | 'sales' | 'supplier' | 'general' {
+    const lowerQuery = query.toLowerCase();
+    
+    // Treat attribute questions (e.g., "what is its name", "price", "sku") as product queries
+    if (lowerQuery.match(/product|stock|inventory|quantity|item|name|price|sku|barcode|hsn|mrp|cost|category|expiry|mfg|brand/)) {
+      return 'product';
+    }
+    if (lowerQuery.match(/sales|revenue|sold|transaction|profit/)) {
+      return 'sales';
+    }
+    if (lowerQuery.match(/supplier|vendor|order|contact/)) {
+      return 'supplier';
+    }
+    return 'general';
+  }
+
+  private async getSpecificContext(queryType: string): Promise<string> {
+    switch (queryType) {
+      case 'product': {
+        const products = await dbService.getProducts(10); // Only top 10
+        return `TOP PRODUCTS (Limited):\n${products.slice(0, 5).map(p => {
+          const expiryInfo = p.expiryDate && p.expiryDate.trim() ? ` | Expiry: ${p.expiryDate}` : '';
+          return `• ${p.name}: ${p.quantity} units, ₹${p.sellingPrice}${expiryInfo}`;
+        }).join('\n')}`;
+      }
+      case 'sales': {
+        const salesData = await dbService.getSalesData();
+        const recentSales = salesData.slice(0, 5);
+        const totalRevenue = recentSales.reduce((sum, s) => sum + s.totalAmount, 0);
+        return `RECENT SALES:\n• Last 5 transactions: ₹${totalRevenue}\n• Total transactions: ${salesData.length}`;
+      }
+      case 'supplier': {
+        const suppliers = await dbService.getSuppliers();
+        return `SUPPLIERS:\n${suppliers.slice(0, 3).map(s => `• ${s.name}: ${s.phoneNumber}`).join('\n')}`;
+      }
+      default:
+        return '';
+    }
+  }
+
+  // Streaming version of sendMessage
+  async sendMessageStream(
+    message: string,
+    onChunk: (chunk: string) => void,
+    onComplete: (fullResponse: string) => void,
+    onError: (error: Error) => void
+  ): Promise<void> {
+    if (!this.isConfigured()) {
+      onError(new Error('Gemini API key not configured'));
+      return;
+    }
+
+    try {
+      // Use semantic search to find relevant context
+      const relevantContext = await vectorStoreService.getRelevantContext(message, 3);
+      const cachedAnalytics = await analyticsCacheService.getAnalytics();
+      const todaySales = await dbService.getTodaysSalesTotal();
+      const queryType = this.detectQueryType(message);
+      const specificContext = await this.getSpecificContext(queryType);
+      const chatContext = this.getRecentChatContext();
+      
+      const businessContext = await this.getComprehensiveBusinessContext();
+      
+      const enhancedPrompt = `RELEVANT DATA:\n${relevantContext}\n\n${specificContext}\n\nANALYTICS:\n• Products: ${cachedAnalytics.totalProducts}\n• Stock Health: ${cachedAnalytics.stockHealth}\n• Today's Sales: ₹${todaySales.totalAmount}\n\n${chatContext ? `RECENT CONVERSATION:\n${chatContext}\n\n` : ''}USER: "${message}"\n\nINSTRUCTIONS: Respond concisely. Use emojis ONLY to highlight important points (⚠️ for issues, 💡 for tips, 📊 for metrics, 🟢🟡🔴 for status). Write naturally. Example:\n⚠️ Low stock on Rice\nToday: ₹500 from 5 sales\n💡 Restock Flour soon\nNEVER use asterisks (*) or dashes (-). Use conversation context to answer follow-up questions. End with a question.\n\nCRITICAL - READ-ONLY: You CANNOT add/edit/delete data. If asked to change anything, say: "I can only provide information. To make changes, use the Products or Suppliers section." Never ask what they want to change.`;
+
+      const contents = [
+        // System context
+        {
+          role: 'user',
+          parts: [{ text: businessContext }]
+        },
+        {
+          role: 'model',
+          parts: [{ text: 'Understood. I am InVo AI, ready to help with inventory and business insights.' }]
+        },
+        // Recent chat history for context
+        ...this.chatHistory.slice(-6).map(msg => ({
+          role: msg.role === 'user' ? 'user' : 'model',
+          parts: [{ text: msg.content }]
+        })),
+        // Current query
+        {
+          role: 'user',
+          parts: [{ text: enhancedPrompt }]
+        }
+      ];
+
+      const response = await fetch(`${this.baseUrl}?key=${this.apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents,
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.9,
+            maxOutputTokens: 250,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status}`);
+      }
+
+      // For now, fallback to non-streaming (React Native doesn't support SSE easily)
+      const data = await response.json();
+      
+      if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+        throw new Error('Invalid response structure');
+      }
+
+      let aiResponse = data.candidates[0].content.parts[0].text;
+      aiResponse = aiResponse.replace(/\*\*(.*?)\*\*/g, '$1');
+      
+      // Simulate streaming by chunking
+      const words = aiResponse.split(' ');
+      let accumulated = '';
+      
+      for (let i = 0; i < words.length; i++) {
+        const chunk = words[i] + ' ';
+        accumulated += chunk;
+        onChunk(chunk);
+        await new Promise(resolve => setTimeout(resolve, 30)); // Simulate streaming delay
+      }
+
+      // Store in history
+      this.chatHistory.push({
+        id: Date.now().toString(),
+        role: 'user',
+        content: message,
+        timestamp: new Date(),
+      });
+      
+      this.chatHistory.push({
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: aiResponse,
+        timestamp: new Date(),
+      });
+
+      onComplete(aiResponse);
+    } catch (error: any) {
+      console.error('Streaming error:', error);
+      onError(error);
+    }
   }
 }
 

@@ -162,8 +162,8 @@ export default function OnboardingScreen() {
                   Profile Setup
                 </ThemedText>
                 
-                <ThemedText style={styles.profileSetupSubtitle}>
-                  Let's Personalize Your Experience
+<ThemedText style={styles.profileSetupSubtitle}>
+                  Let{'\''}s Personalize Your Experience
                 </ThemedText>
               </View>
               
@@ -212,8 +212,8 @@ export default function OnboardingScreen() {
                   Business Setup
                 </ThemedText>
                 
-                <ThemedText style={styles.businessSetupSubtitle}>
-                  Let's set up Your Business Profile
+<ThemedText style={styles.businessSetupSubtitle}>
+                  Let{'\''}s set up Your Business Profile
                 </ThemedText>
               </View>
               

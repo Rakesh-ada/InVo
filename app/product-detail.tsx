@@ -1,7 +1,10 @@
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
+// eslint-disable-next-line import/namespace
 import { dbService, Product } from '@/services/database';
+import { EditIcon } from '@/components/ui/edit-icon';
+import { DeleteProductIcon } from '@/components/ui/delete-product-icon';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
@@ -194,14 +197,10 @@ export default function ProductDetailScreen() {
           {!isEditMode ? (
             <>
               <TouchableOpacity onPress={() => setIsEditMode(true)} style={styles.headerIconBtn}>
-                <Image
-                  source={require('@/assets/images/edit.png')}
-                  style={{ width: 18, height: 18, tintColor: '#FFFFFF' }}
-                  resizeMode="contain"
-                />
+                <EditIcon size={18} color="#3B82F6" />
               </TouchableOpacity>
               <TouchableOpacity onPress={() => setIsDeleteModalOpen(true)} style={styles.headerIconBtn}>
-                <IconSymbol name="trash" size={18} color="#EF4444" />
+                <DeleteProductIcon size={18} color="#EF4444" />
               </TouchableOpacity>
             </>
           ) : null}
@@ -246,7 +245,7 @@ export default function ProductDetailScreen() {
             </View>
             <View style={[styles.quickStatCard, { borderColor: '#3A3A3A' }]}>
               <ThemedText style={styles.quickStatLabel} darkColor="#9BA1A6">Quantity</ThemedText>
-              <ThemedText style={styles.quickStatValue}>{product.quantity}</ThemedText>
+              <ThemedText style={styles.quickStatValue}>{product.quantity} {product.unit || 'pc'}</ThemedText>
             </View>
           </View>
 
@@ -311,7 +310,7 @@ export default function ProductDetailScreen() {
                   placeholderTextColor="#6B7280"
                 />
               ) : (
-                <ThemedText style={styles.detailValue}>{product.quantity}</ThemedText>
+                <ThemedText style={styles.detailValue}>{product.quantity} {product.unit || 'pc'}</ThemedText>
               )}
             </View>
 
@@ -370,8 +369,8 @@ export default function ProductDetailScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <ThemedText type="subtitle" style={{ marginBottom: 12 }}>Delete Product</ThemedText>
-            <ThemedText style={{ marginBottom: 20, color: '#9BA1A6' }}>
-              Are you sure you want to delete "{product.name}"? This action cannot be undone.
+<ThemedText style={{ marginBottom: 20, color: '#9BA1A6' }}>
+              Are you sure you want to delete “{product.name}”? This action cannot be undone.
             </ThemedText>
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.cancelButton} onPress={() => setIsDeleteModalOpen(false)}>
@@ -470,13 +469,13 @@ const styles = StyleSheet.create({
     borderBottomColor: '#2A2A2A',
   },
   detailLabel: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: '#ECEDEE',
     flex: 1,
   },
   detailValue: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#C7CBD1',
     textAlign: 'right',
     flex: 1,

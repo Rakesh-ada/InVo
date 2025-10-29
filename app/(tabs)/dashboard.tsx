@@ -1,7 +1,9 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { NotificationBadgeIcon } from '@/components/ui/notification-badge-icon';
 import { useTabBar } from '@/contexts/TabBarContext';
+// eslint-disable-next-line import/namespace
 import { dbService, Product } from '@/services/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -96,12 +98,22 @@ export default function DashboardScreen() {
     return items;
   }, [salesData]);
   
-  // Calculate out of stock and low stock items
+  // Calculate out of stock, low stock, and expired items
   const outOfStockItems = products.filter(product => product.quantity === 0);
   const lowStockItems = products.filter(product => product.quantity > 0 && product.quantity <= 5);
-  // Ignore list applies ONLY to low-stock items, not out-of-stock
+  
+  // Check for expired items
+  const now = new Date();
+  const expiredItems = products.filter(product => {
+    if (!product.expiryDate) return false;
+    const expiryDate = new Date(product.expiryDate);
+    return expiryDate < now;
+  });
+  
+  // Ignore list applies ONLY to low-stock items, not out-of-stock or expired
   const visibleOutOfStock = outOfStockItems; // never ignored
   const visibleLowStock = lowStockItems.filter(p => !ignoredAlertIds.includes(p.id));
+  const visibleExpired = expiredItems; // never ignored
   const totalNotificationCount = visibleOutOfStock.length + visibleLowStock.length;
 
   // Keep tab bar visible when notification sidebar is open
@@ -115,8 +127,10 @@ export default function DashboardScreen() {
       
       // Load preferences from storage
       const storedPrefs = await AsyncStorage.getItem(DASHBOARD_PREFS_KEY);
+      let currentPrefs = preferences;
       if (storedPrefs) {
-        setPreferences(JSON.parse(storedPrefs));
+        currentPrefs = JSON.parse(storedPrefs);
+        setPreferences(currentPrefs);
       }
       // Load ignored alert ids
       const storedIgnored = await AsyncStorage.getItem('@inventory_ignored_ids');
@@ -162,7 +176,7 @@ export default function DashboardScreen() {
       
       // Save updated preferences
       const updatedPrefs = {
-        ...preferences,
+        ...currentPrefs,
         lastViewedDate: new Date().toISOString(),
       };
       await AsyncStorage.setItem(DASHBOARD_PREFS_KEY, JSON.stringify(updatedPrefs));
@@ -173,17 +187,17 @@ export default function DashboardScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [preferences]);
-
-  useEffect(() => {
-    loadDashboardData();
   }, []);
+
+useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
 
   useFocusEffect(
     useCallback(() => {
       loadDashboardData();
       return () => {};
-    }, [])
+    }, [loadDashboardData])
   );
 
   const onRefresh = useCallback(async () => {
@@ -205,6 +219,15 @@ export default function DashboardScreen() {
     }
   }, [ignoredAlertIds]);
 
+  const handleRemoveExpiredItem = useCallback(async (productId: string) => {
+    try {
+      await dbService.deleteProduct(productId);
+      await loadDashboardData();
+    } catch (e) {
+      console.warn('Failed to remove expired item:', e);
+    }
+  }, [loadDashboardData]);
+
   return (
     <>
       <SafeAreaView style={styles.safeArea}>
@@ -215,16 +238,11 @@ export default function DashboardScreen() {
                 style={styles.notificationButton}
                 onPress={() => setIsNotificationOpen(!isNotificationOpen)}
               >
-                <Image 
-                  source={require('@/assets/images/box.png')} 
-                  style={styles.notificationIcon} 
-                  resizeMode="contain" 
+                <NotificationBadgeIcon 
+                  size={24} 
+                  color="#FFFFFF"
+                  badgeColor={totalNotificationCount > 0 ? "#3B82F6" : "#FFFFFF"}
                 />
-                {totalNotificationCount > 0 && (
-                  <View style={styles.notificationBadge}>
-                    <ThemedText adjustsFontSizeToFit numberOfLines={1} style={styles.badgeText}>{totalNotificationCount}</ThemedText>
-                  </View>
-                )}
               </TouchableOpacity>
             </View>
 
@@ -328,15 +346,17 @@ export default function DashboardScreen() {
               ) : (
                 <View style={styles.itemsListContainer}>
                   <FlatList
-                    data={[...visibleOutOfStock, ...visibleLowStock]}
+                    data={[...visibleExpired, ...visibleOutOfStock, ...visibleLowStock]}
                     keyExtractor={(item) => item.id}
                     renderItem={({ item }) => {
-                      const isOutOfStock = item.quantity === 0;
-                      const isLowStock = item.quantity > 0 && item.quantity <= 5;
+                      const isExpired = expiredItems.some(p => p.id === item.id);
+                      const isOutOfStock = !isExpired && item.quantity === 0;
+                      const isLowStock = !isExpired && !isOutOfStock && item.quantity > 0 && item.quantity <= 5;
                       
                       return (
                         <View style={[
                           styles.alertItem,
+                          isExpired && styles.expiredItem,
                           isOutOfStock && styles.outOfStockItem,
                           isLowStock && styles.lowStockItem
                         ]}>
@@ -346,13 +366,14 @@ export default function DashboardScreen() {
                             ) : (
                               <View style={[
                                 styles.alertItemIcon,
+                                isExpired && styles.expiredIcon,
                                 isOutOfStock && styles.outOfStockIcon,
                                 isLowStock && styles.lowStockIcon
                               ]}>
                                 <IconSymbol 
-                                  name={isOutOfStock ? "exclamationmark.triangle.fill" : "arrow.up.circle.fill"} 
+                                  name={isExpired ? "xmark.circle.fill" : isOutOfStock ? "exclamationmark.triangle.fill" : "arrow.up.circle.fill"} 
                                   size={26} 
-                                  color={isOutOfStock ? "#EF4444" : "#F59E0B"} 
+                                  color={isExpired ? "#DC2626" : isOutOfStock ? "#EF4444" : "#F59E0B"} 
                                 />
                               </View>
                             )}
@@ -366,16 +387,22 @@ export default function DashboardScreen() {
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                             <View style={[
                               styles.alertBadge,
+                              isExpired && styles.expiredBadge,
                               isOutOfStock && styles.outOfStockBadge,
                               isLowStock && styles.lowStockBadge
                             ]}>
                               <ThemedText style={styles.alertBadgeText}>
-                                {isOutOfStock ? "OUT" : "LOW"}
+                                {isExpired ? "EXPIRED" : isOutOfStock ? "OUT" : "LOW"}
                               </ThemedText>
                             </View>
                             {isLowStock && (
                               <TouchableOpacity onPress={() => handleIgnoreAlert(item.id)} style={styles.ignoreButton}>
-                                <ThemedText style={styles.ignoreButtonText}>Ignore</ThemedText>
+                                <ThemedText style={styles.ignoreButtonText}>IGNORE</ThemedText>
+                              </TouchableOpacity>
+                            )}
+                            {isExpired && (
+                              <TouchableOpacity onPress={() => handleRemoveExpiredItem(item.id)} style={styles.removeButton}>
+                                <ThemedText style={styles.removeButtonText}>REMOVE</ThemedText>
                               </TouchableOpacity>
                             )}
                           </View>
@@ -519,27 +546,16 @@ const styles = StyleSheet.create({
     height: 20,
     tintColor: '#ECEDEE',
   },
-  notificationBadge: {
+  notificationDot: {
     position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#3b82f6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-  },
-  badgeText: {
-    color: 'white',
-    fontSize: 11,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    textAlignVertical: 'center',
-    lineHeight: 14,
-    includeFontPadding: false,
+    top: 6,
+    right: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#3B82F6',
+    borderWidth: 2,
+    borderColor: '#2A2A2A',
   },
   statsRow: {
     flexDirection: 'row',
@@ -877,20 +893,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#1A1A1A',
-    borderRadius: 0,
-    padding: 16,
-    marginBottom: 8,
+    backgroundColor: '#242424',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: '#2F2F2F',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
   },
   outOfStockItem: {
-    borderLeftWidth: 3,
-    borderLeftColor: '#666666',
+    backgroundColor: '#2A1F1F',
+    borderColor: '#3A2020',
   },
   lowStockItem: {
-    borderLeftWidth: 3,
-    borderLeftColor: '#666666',
+    backgroundColor: '#2A2619',
+    borderColor: '#3A3020',
+  },
+  expiredItem: {
+    backgroundColor: '#2A1818',
+    borderColor: '#DC2626',
   },
   alertItemLeft: {
     flexDirection: 'row',
@@ -898,40 +923,48 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   alertItemImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 0,
-    marginRight: 12,
+    width: 48,
+    height: 48,
+    borderRadius: 10,
+    marginRight: 14,
+    borderWidth: 1,
+    borderColor: '#3A3A3A',
   },
   alertItemIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 0,
+    width: 48,
+    height: 48,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
-    backgroundColor: '#2A2A2A',
+    marginRight: 14,
+    backgroundColor: '#2F2F2F',
     borderWidth: 1,
     borderColor: '#404040',
   },
   outOfStockIcon: {
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#3A2020',
     borderWidth: 1,
-    borderColor: '#404040',
+    borderColor: '#EF4444',
   },
   lowStockIcon: {
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#3A3220',
     borderWidth: 1,
-    borderColor: '#404040',
+    borderColor: '#F59E0B',
+  },
+  expiredIcon: {
+    backgroundColor: '#3A1818',
+    borderWidth: 1,
+    borderColor: '#DC2626',
   },
   alertItemInfo: {
     flex: 1,
   },
   alertItemName: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 4,
+    marginBottom: 5,
+    letterSpacing: -0.2,
   },
   alertItemDetails: {
     flexDirection: 'row',
@@ -939,46 +972,64 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   alertItemPrice: {
-    fontSize: 14,
-    color: '#9BA1A6',
-    fontWeight: '500',
+    fontSize: 15,
+    color: '#22C55E',
+    fontWeight: '700',
   },
   alertBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 0,
-    minWidth: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    minWidth: 50,
     alignItems: 'center',
-    backgroundColor: '#333333',
+    backgroundColor: '#3A3A3A',
     borderWidth: 1,
-    borderColor: '#404040',
+    borderColor: '#4A4A4A',
   },
   outOfStockBadge: {
-    backgroundColor: '#333333',
-    borderColor: '#404040',
+    backgroundColor: '#3A2020',
+    borderColor: '#EF4444',
   },
   lowStockBadge: {
-    backgroundColor: '#333333',
-    borderColor: '#404040',
+    backgroundColor: '#3A3220',
+    borderColor: '#F59E0B',
+  },
+  expiredBadge: {
+    backgroundColor: '#3A1818',
+    borderColor: '#DC2626',
   },
   alertBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#CCCCCC',
-    letterSpacing: 0.5,
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.8,
   },
   ignoreButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 0,
-    backgroundColor: '#2A2A2A',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#3A3A3A',
+    borderColor: '#22C55E',
   },
   ignoreButtonText: {
-    fontSize: 12,
-    color: '#9BA1A6',
+    fontSize: 13,
+    color: '#FFFFFF',
     fontWeight: '600',
+  },
+  removeButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#DC2626',
+    borderWidth: 1,
+    borderColor: '#DC2626',
+  },
+  removeButtonText: {
+    fontSize: 13,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 });
 

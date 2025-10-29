@@ -3,7 +3,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { ChatMessage, geminiService } from '@/services/gemini';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -27,6 +27,8 @@ export default function AIChatScreen() {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [streamingMessage, setStreamingMessage] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
   const cancelReplyRef = useRef(false);
 
   const renderInlineSegments = (text: string) => {
@@ -112,11 +114,7 @@ export default function AIChatScreen() {
     );
   };
 
-  useEffect(() => {
-    initializeChat();
-  }, []);
-
-  const initializeChat = async () => {
+const initializeChat = useCallback(async () => {
     setIsInitializing(true);
     try {
       // Check if API is configured
@@ -161,10 +159,14 @@ What would you like to know today?`,
     } finally {
       setIsInitializing(false);
     }
-  };
+  }, [router]);
+
+  useEffect(() => {
+    initializeChat();
+  }, [initializeChat]);
 
   const sendMessage = async () => {
-    if (!inputText.trim() || isLoading) return;
+    if (!inputText.trim() || isLoading || isStreaming) return;
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -176,6 +178,8 @@ What would you like to know today?`,
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
     setIsLoading(true);
+    setIsStreaming(true);
+    setStreamingMessage('');
     cancelReplyRef.current = false;
 
     // Scroll to bottom
@@ -184,43 +188,64 @@ What would you like to know today?`,
     }, 100);
 
     try {
-      console.log('Sending message to AI:', userMessage.content);
-      const response = await geminiService.sendMessage(userMessage.content);
-      console.log('Received response from AI:', response.substring(0, 100) + '...');
+      console.log('Sending message to AI (streaming):', userMessage.content);
       
-      if (!response || response.trim().length === 0) {
-        throw new Error('Received empty response from AI');
-      }
-      
-      if (cancelReplyRef.current) {
-        return; // stop was requested; do not append assistant message
-      }
+      // Use streaming API
+      await geminiService.sendMessageStream(
+        userMessage.content,
+        (chunk) => {
+          // On each chunk received
+          if (!cancelReplyRef.current) {
+            setStreamingMessage(prev => prev + chunk);
+            setTimeout(() => {
+              scrollViewRef.current?.scrollToEnd({ animated: false });
+            }, 50);
+          }
+        },
+        (fullResponse) => {
+          // On complete
+          if (cancelReplyRef.current) {
+            setStreamingMessage('');
+            return;
+          }
 
-      const assistantMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response,
-        timestamp: new Date(),
-      };
+          const assistantMessage: ChatMessage = {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: fullResponse,
+            timestamp: new Date(),
+          };
 
-      setMessages(prev => [...prev, assistantMessage]);
+          setMessages(prev => [...prev, assistantMessage]);
+          setStreamingMessage('');
+          setIsStreaming(false);
+          setIsLoading(false);
 
-      // Scroll to bottom after response
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 200);
+          setTimeout(() => {
+            scrollViewRef.current?.scrollToEnd({ animated: true });
+          }, 200);
+        },
+        (error) => {
+          // On error
+          console.error('Failed to get AI response:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          
+          const errorChatMessage: ChatMessage = {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: `❌ Sorry, I encountered an error: ${errorMessage}\n\nPlease try again or check your API configuration.`,
+            timestamp: new Date(),
+          };
+          setMessages(prev => [...prev, errorChatMessage]);
+          setStreamingMessage('');
+          setIsStreaming(false);
+          setIsLoading(false);
+        }
+      );
     } catch (error) {
-      console.error('Failed to get AI response:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
-      const errorChatMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `❌ Sorry, I encountered an error: ${errorMessage}\n\nPlease try again or check your API configuration.`,
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, errorChatMessage]);
-    } finally {
+      console.error('Streaming setup error:', error);
+      setStreamingMessage('');
+      setIsStreaming(false);
       setIsLoading(false);
     }
   };
@@ -340,7 +365,23 @@ What would you like to know today?`,
             </View>
           ))}
           
-          {isLoading && (
+          {/* Streaming message */}
+          {isStreaming && streamingMessage && (
+            <View style={[styles.messageBubble, styles.assistantBubble]}>
+              <View style={styles.assistantMessageWrapper}>
+                <View style={styles.aiAvatarTop}>
+                  <IconSymbol name="sparkles" size={14} color="#3B82F6" />
+                </View>
+                <View style={[styles.messageContainer, styles.assistantMessageContainer]}>
+                  <View style={styles.messageInner}>
+                    {renderFormattedMessage(streamingMessage)}
+                  </View>
+                </View>
+              </View>
+            </View>
+          )}
+          
+          {isLoading && !isStreaming && (
             <View style={[styles.messageBubble, styles.assistantBubble]}>
               <View style={styles.assistantMessageWrapper}>
                 <View style={styles.aiAvatarTop}>
@@ -357,7 +398,12 @@ What would you like to know today?`,
                 <View style={styles.stopRow}>
                   <TouchableOpacity
                     style={styles.stopChip}
-                    onPress={() => { cancelReplyRef.current = true; setIsLoading(false); }}
+                    onPress={() => { 
+                      cancelReplyRef.current = true; 
+                      setIsLoading(false); 
+                      setIsStreaming(false);
+                      setStreamingMessage('');
+                    }}
                     activeOpacity={0.7}
                   >
                     <View style={styles.stopDot} />

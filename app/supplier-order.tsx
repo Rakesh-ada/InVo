@@ -1,6 +1,10 @@
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Product as DBProduct, dbService, Supplier } from '@/services/database';
+import { CallIcon } from '@/components/ui/call-icon';
+import { WhatsAppIcon } from '@/components/ui/whatsapp-icon';
+import { SearchIcon } from '@/components/ui/search-icon';
+import { DeleteIcon } from '@/components/ui/delete-icon';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -51,6 +55,8 @@ const SearchBarComponent = React.memo(({
     </View>
   </View>
 ));
+
+SearchBarComponent.displayName = 'SearchBarComponent';
 
 export default function SupplierOrderScreen() {
   const router = useRouter();
@@ -228,6 +234,9 @@ export default function SupplierOrderScreen() {
       <View style={styles.itemInfo}>
         <View style={styles.itemHeader}>
           <ThemedText style={styles.itemName}>{item.name}</ThemedText>
+          <ThemedText style={styles.itemPrice}>₹{item.price}</ThemedText>
+        </View>
+        <View style={styles.itemDetails}>
           <View style={styles.qtyWrap}>
             <TouchableOpacity
               style={styles.qtyBtn}
@@ -274,11 +283,7 @@ export default function SupplierOrderScreen() {
                 onPress={toggleSearch}
                 style={styles.searchToggleBtn}
               >
-                <Image 
-                  source={require('@/assets/images/explore.png')} 
-                  style={[styles.headerIcon, { tintColor: isSearchActive ? '#3B82F6' : '#9BA1A6' }]} 
-                  resizeMode="contain" 
-                />
+                <SearchIcon size={20} color={isSearchActive ? '#3B82F6' : '#9BA1A6'} />
               </TouchableOpacity>
               <TouchableOpacity
                 accessibilityRole="button"
@@ -290,11 +295,7 @@ export default function SupplierOrderScreen() {
                 style={styles.clearBtn}
                 disabled={cart.length === 0}
               >
-                <Image 
-                  source={require('@/assets/images/delete.png')} 
-                  style={[styles.headerIcon, { tintColor: cart.length === 0 ? '#6B7280' : '#FCA5A5' }]} 
-                  resizeMode="contain" 
-                />
+                <DeleteIcon size={20} color={cart.length === 0 ? '#6B7280' : '#FCA5A5'} />
               </TouchableOpacity>
               <View style={styles.countBadge}>
                 <ThemedText style={styles.countBadgeText}>{cart.reduce((s, c) => s + c.qty, 0)}</ThemedText>
@@ -355,7 +356,7 @@ export default function SupplierOrderScreen() {
               accessibilityLabel="Call supplier"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <IconSymbol name="phone.fill" size={24} color="#3B82F6" />
+              <CallIcon size={24} color="#3B82F6" />
               <ThemedText style={styles.callButtonText}>Call</ThemedText>
             </TouchableOpacity>
 
@@ -367,7 +368,7 @@ export default function SupplierOrderScreen() {
               accessibilityLabel="Send order via WhatsApp"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <IconSymbol name="paperplane.fill" size={20} color="#FFFFFF" />
+              <WhatsAppIcon size={20} color="#FFFFFF" />
               <ThemedText style={styles.whatsappButtonText}>Send Order</ThemedText>
             </TouchableOpacity>
           </View>

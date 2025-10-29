@@ -10,6 +10,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 // import * as FileSystem from 'expo-file-system';
 // import * * Sharing from 'expo-sharing';
 import * as ImagePicker from 'expo-image-picker';
+import { QRIcon } from '@/components/ui/qr-icon';
+import { BusinessIcon } from '@/components/ui/business-icon';
+import { ReportIcon } from '@/components/ui/report-icon';
+import { AIIcon } from '@/components/ui/ai-icon';
+import { SupplierIcon } from '@/components/ui/supplier-icon';
 
 type SettingsData = {
   profileName: string;
@@ -251,7 +256,7 @@ export default function SettingsScreen() {
           <View style={styles.settingCard}>
             <View style={styles.settingRow}>
               <View style={styles.settingLeft}>
-                <IconSymbol name="building.2" size={20} color="#FFFFFF" />
+                <BusinessIcon size={20} color="#FFFFFF" />
                 <ThemedText style={styles.settingLabel}>Business Name</ThemedText>
               </View>
               <TextInput
@@ -270,7 +275,7 @@ export default function SettingsScreen() {
           <View style={styles.settingCard}>
             <View style={styles.settingRow}>
               <View style={styles.settingLeft}>
-                <IconSymbol name="qrcode" size={20} color="#FFFFFF" />
+                <QRIcon size={20} color="#FFFFFF" />
                 <ThemedText style={styles.settingLabel}>Business QR Code</ThemedText>
               </View>
               <TouchableOpacity 
@@ -304,7 +309,7 @@ export default function SettingsScreen() {
               onPress={() => router.push('/suppliers')}
             >
               <View style={styles.settingLeft}>
-                <IconSymbol name="person.fill" size={20} color="#FFFFFF" />
+                <SupplierIcon size={20} color="#FFFFFF" />
                 <ThemedText style={styles.settingLabel}>Suppliers</ThemedText>
               </View>
               <IconSymbol name="chevron.right" size={16} color="#9BA1A6" />
@@ -318,7 +323,7 @@ export default function SettingsScreen() {
               onPress={() => router.push('/ai-chat')}
             >
               <View style={styles.settingLeft}>
-                <IconSymbol name="sparkles" size={20} color="#FFFFFF" />
+                <AIIcon size={20} color="#FFFFFF" />
                 <ThemedText style={styles.settingLabel}>Ask InVo AI</ThemedText>
               </View>
               <IconSymbol name="chevron.right" size={16} color="#9BA1A6" />
@@ -333,7 +338,7 @@ export default function SettingsScreen() {
               disabled={isGeneratingReport}
             >
               <View style={styles.settingLeft}>
-                <IconSymbol name="chart.bar.fill" size={20} color="#FFFFFF" />
+                <ReportIcon size={20} color="#FFFFFF" />
                 <ThemedText style={styles.settingLabel}>Weekly Report</ThemedText>
               </View>
               {isGeneratingReport ? (

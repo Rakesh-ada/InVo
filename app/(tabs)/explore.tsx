@@ -1,11 +1,15 @@
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+// eslint-disable-next-line import/namespace
 import { Product as DBProduct, dbService } from '@/services/database';
+import { SearchIcon } from '@/components/ui/search-icon';
+import { DeleteIcon } from '@/components/ui/delete-icon';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, FlatList, Image, Modal, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Animated, FlatList, Image, Modal, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import smsPaymentMonitor from '@/services/sms-payment-monitor';
 
 type CartItem = { id: string; name: string; qty: number; price: number };
 
@@ -52,6 +56,8 @@ const SearchBarComponent = React.memo(({
   </View>
 ));
 
+SearchBarComponent.displayName = 'SearchBarComponent';
+
 export default function ExploreScreen() {
   const [query, setQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -59,6 +65,13 @@ export default function ExploreScreen() {
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [isPaymentModalVisible, setIsPaymentModalVisible] = useState(false);
   const [settings, setSettings] = useState<{qrPaymentImageUri?: string; businessName?: string}>({});
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  
+  // Animation values
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const successScaleAnim = useRef(new Animated.Value(0)).current;
+  const successRotateAnim = useRef(new Animated.Value(0)).current;
 
   // Save cart to AsyncStorage
   const saveCartToStorage = useCallback(async (cartData: CartItem[]) => {
@@ -145,7 +158,7 @@ export default function ExploreScreen() {
           // Show alert when trying to exceed available stock
           Alert.alert(
             'Stock Limit Reached', 
-            `You can only add up to ${product.quantity} ${product.name}(s). Only ${product.quantity} available in stock.`
+            `You can only add up to ${product.quantity} ${product.unit || 'pc'} of ${product.name}. Only ${product.quantity} ${product.unit || 'pc'} available in stock.`
           );
           newCart = prev; // Don't add if would exceed inventory
         }
@@ -186,7 +199,7 @@ export default function ExploreScreen() {
         // Show alert when trying to exceed available stock
         Alert.alert(
           'Stock Limit Reached', 
-          `You can only add up to ${product.quantity} ${product.name}(s). Only ${product.quantity} available in stock.`
+          `You can only add up to ${product.quantity} ${product.unit || 'pc'} of ${product.name}. Only ${product.quantity} ${product.unit || 'pc'} available in stock.`
         );
       }
     }
@@ -202,9 +215,29 @@ export default function ExploreScreen() {
 
   const total = useMemo(() => cart.reduce((sum, c) => sum + c.qty * c.price, 0), [cart]);
 
-  const proceed = () => {
+  const proceed = async () => {
     if (cart.length === 0) return;
+    setPaymentSuccess(false);
     setIsPaymentModalVisible(true);
+    
+    // Reset animations
+    scaleAnim.setValue(1);
+    fadeAnim.setValue(1);
+    successScaleAnim.setValue(0);
+    successRotateAnim.setValue(0);
+    
+    // Start SMS monitoring for payment
+    const monitoringStarted = await smsPaymentMonitor.startMonitoring(
+      total,
+      (payment) => {
+        console.log('Payment detected:', payment);
+        handlePaymentDetected();
+      }
+    );
+    
+    if (!monitoringStarted) {
+      console.log('SMS monitoring not available or permissions denied');
+    }
   };
 
   const handlePaymentComplete = async () => {
@@ -292,7 +325,49 @@ export default function ExploreScreen() {
   };
 
   const handlePaymentCancel = () => {
+    smsPaymentMonitor.stopMonitoring();
     setIsPaymentModalVisible(false);
+    setPaymentSuccess(false);
+  };
+  
+  const handlePaymentDetected = () => {
+    setPaymentSuccess(true);
+    
+    // Animate QR code out
+    Animated.parallel([
+      Animated.timing(scaleAnim, {
+        toValue: 0.5,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    
+    // Animate success checkmark in
+    setTimeout(() => {
+      Animated.parallel([
+        Animated.spring(successScaleAnim, {
+          toValue: 1,
+          friction: 4,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+        Animated.timing(successRotateAnim, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, 300);
+    
+    // Auto-complete payment after animation
+    setTimeout(() => {
+      handlePaymentComplete();
+    }, 2000);
   };
 
   const toggleSearch = () => {
@@ -330,7 +405,7 @@ export default function ExploreScreen() {
               <ThemedText style={styles.itemPrice}>₹{item.price.toFixed(2)} each</ThemedText>
               {product && (
                 <ThemedText style={styles.stockInfo}>
-                  Stock: {product.quantity - item.qty} remaining
+                  Stock: {product.quantity - item.qty} {product.unit || 'pc'} remaining
                 </ThemedText>
               )}
             </View>
@@ -377,11 +452,7 @@ export default function ExploreScreen() {
                 onPress={toggleSearch}
                 style={styles.searchToggleBtn}
               >
-                <Image 
-                  source={require('@/assets/images/explore.png')} 
-                  style={[styles.headerIcon, { tintColor: isSearchActive ? '#3B82F6' : '#9BA1A6' }]} 
-                  resizeMode="contain" 
-                />
+                <SearchIcon size={20} color={isSearchActive ? '#3B82F6' : '#9BA1A6'} />
               </TouchableOpacity>
               <TouchableOpacity
                 accessibilityRole="button"
@@ -393,11 +464,7 @@ export default function ExploreScreen() {
                 style={styles.clearBtn}
                 disabled={cart.length === 0}
               >
-                <Image 
-                  source={require('@/assets/images/delete.png')} 
-                  style={[styles.headerIcon, { tintColor: cart.length === 0 ? '#6B7280' : '#FCA5A5' }]} 
-                  resizeMode="contain" 
-                />
+                <DeleteIcon size={20} color={cart.length === 0 ? '#6B7280' : '#FCA5A5'} />
               </TouchableOpacity>
               <View style={styles.countBadge}>
                 <ThemedText style={styles.countBadgeText}>{cart.reduce((s, c) => s + c.qty, 0)}</ThemedText>
@@ -463,7 +530,6 @@ export default function ExploreScreen() {
             accessibilityLabel="Proceed to complete cart"
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <IconSymbol name="cart.fill" size={20} color="#FFFFFF" />
             <ThemedText style={styles.proceedText}>Proceed</ThemedText>
           </TouchableOpacity>
         </View>
@@ -477,64 +543,84 @@ export default function ExploreScreen() {
         onRequestClose={handlePaymentCancel}
       >
         <View style={styles.modalOverlay}>
+          <TouchableOpacity 
+            style={styles.modalBackdrop}
+            activeOpacity={1} 
+            onPress={handlePaymentCancel}
+          />
           <View style={styles.paymentModal}>
             <View style={styles.paymentHeader}>
               <ThemedText style={styles.paymentTitle}>Payment</ThemedText>
-              <TouchableOpacity onPress={handlePaymentCancel} style={styles.closeButton}>
-                <IconSymbol name="xmark" size={20} color="#9BA1A6" />
-              </TouchableOpacity>
             </View>
             
             <View style={styles.paymentContent}>
               <ThemedText style={styles.paymentInstruction}>
-                Scan QR code to pay ₹{total.toFixed(2)}
+                Scan QR code to pay
+              </ThemedText>
+              <ThemedText style={styles.paymentAmount}>
+                ₹{total.toFixed(2)}
               </ThemedText>
               
               <View style={styles.qrCodeContainer}>
-                {settings.qrPaymentImageUri ? (
-                  <Image 
-                    source={{ uri: settings.qrPaymentImageUri }} 
-                    style={styles.qrCodeImage} 
-                    resizeMode="contain" 
-                  />
+                {!paymentSuccess ? (
+                  <Animated.View
+                    style={[{
+                      transform: [{ scale: scaleAnim }],
+                      opacity: fadeAnim,
+                    }]}
+                  >
+                    {settings.qrPaymentImageUri ? (
+                      <Image 
+                        source={{ uri: settings.qrPaymentImageUri }} 
+                        style={styles.qrCodeImage} 
+                        resizeMode="contain" 
+                      />
+                    ) : (
+                      <View style={styles.qrCodePlaceholder}>
+                        <IconSymbol name="qrcode" size={48} color="#9BA1A6" />
+                        <ThemedText style={styles.qrCodePlaceholderText}>
+                          No QR Code
+                        </ThemedText>
+                        <ThemedText style={styles.qrCodePlaceholderSubtext}>
+                          Add in Settings
+                        </ThemedText>
+                      </View>
+                    )}
+                  </Animated.View>
                 ) : (
-                  <View style={styles.qrCodePlaceholder}>
-                    <IconSymbol name="qrcode" size={48} color="#9BA1A6" />
-                    <ThemedText style={styles.qrCodePlaceholderText}>
-                      No QR Code
-                    </ThemedText>
-                    <ThemedText style={styles.qrCodePlaceholderSubtext}>
-                      Add in Settings
-                    </ThemedText>
-                  </View>
+                  <Animated.View
+                    style={[styles.successContainer, {
+                      transform: [
+                        { scale: successScaleAnim },
+                        { 
+                          rotate: successRotateAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ['0deg', '360deg'],
+                          })
+                        },
+                      ],
+                    }]}
+                  >
+                    <View style={styles.successCircle}>
+                      <IconSymbol name="checkmark" size={64} color="#FFFFFF" />
+                    </View>
+                    <ThemedText style={styles.successText}>Payment Successful!</ThemedText>
+                  </Animated.View>
                 )}
-              </View>
-              
-              <View style={styles.paymentSummary}>
-                <View style={styles.paymentTotal}>
-                  <ThemedText style={styles.paymentTotalLabel}>Total :</ThemedText>
-                  <ThemedText style={styles.paymentTotalAmount}>₹{total.toFixed(2)}</ThemedText>
-                </View>
               </View>
             </View>
             
-            <View style={styles.paymentActions}>
-              <TouchableOpacity 
-                style={styles.cancelButton} 
-                onPress={handlePaymentCancel}
-              >
-                <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.completeButton} 
-                onPress={handlePaymentComplete}
-                disabled={!settings.qrPaymentImageUri}
-              >
-                <IconSymbol name="checkmark" size={20} color="#FFFFFF" />
-                <ThemedText style={styles.completeButtonText}>Done</ThemedText>
-              </TouchableOpacity>
-            </View>
+            {!paymentSuccess && (
+              <View style={styles.paymentActions}>
+                <TouchableOpacity 
+                  style={styles.completeButton} 
+                  onPress={handlePaymentComplete}
+                  disabled={!settings.qrPaymentImageUri}
+                >
+                  <ThemedText style={styles.completeButtonText}>Done</ThemedText>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -754,7 +840,7 @@ const styles = StyleSheet.create({
     gap: 10, 
     opacity: 1 
   },
-  proceedText: { color: '#FFFFFF', fontWeight: '700' },
+  proceedText: { color: '#FFFFFF', fontWeight: '700', fontSize: 18 },
   emptyCartContainer: { 
     alignItems: 'center', 
     justifyContent: 'center', 
@@ -778,77 +864,97 @@ const styles = StyleSheet.create({
   // Payment Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
   },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+  },
   paymentModal: {
-    backgroundColor: '#1A1A1A',
-    borderRadius: 24,
+    backgroundColor: '#1F1F1F',
+    borderRadius: 28,
     width: '100%',
-    maxWidth: 380,
+    maxWidth: 400,
     maxHeight: '85%',
-    borderWidth: 1,
-    borderColor: '#333333',
+    borderWidth: 0,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    elevation: 12,
+    overflow: 'hidden',
   },
   paymentHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333333',
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 20,
+    borderBottomWidth: 0,
+    position: 'relative',
   },
   paymentTitle: {
-    fontSize: 24,
-    fontWeight: '800',
+    fontSize: 28,
+    fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: -0.5,
+    letterSpacing: -0.8,
   },
   closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    position: 'absolute',
+    right: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#2A2A2A',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#404040',
+    borderWidth: 0,
   },
   paymentContent: {
-    padding: 24,
-    paddingTop: 20,
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 24,
   },
   paymentInstruction: {
-    fontSize: 18,
-    color: '#E5E5E5',
+    fontSize: 15,
+    color: '#9BA1A6',
     textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 24,
+    marginTop: 16,
+    marginBottom: 8,
     fontWeight: '500',
+    lineHeight: 20,
+  },
+  paymentAmount: {
+    fontSize: 36,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 28,
+    fontWeight: '700',
+    letterSpacing: -1,
+    lineHeight: 42,
   },
   qrCodeContainer: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 12,
   },
   qrCodeImage: {
-    width: 220,
-    height: 220,
-    borderRadius: 16,
+    width: 280,
+    height: 280,
+    borderRadius: 20,
     backgroundColor: '#FFFFFF',
-    padding: 8,
+    padding: 12,
   },
   qrCodePlaceholder: {
-    width: 220,
-    height: 220,
-    borderRadius: 16,
+    width: 280,
+    height: 280,
+    borderRadius: 20,
     backgroundColor: '#2A2A2A',
     alignItems: 'center',
     justifyContent: 'center',
@@ -870,10 +976,9 @@ const styles = StyleSheet.create({
   },
   paymentSummary: {
     backgroundColor: '#2A2A2A',
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 20,
-    borderWidth: 1,
-    borderColor: '#333333',
+    borderWidth: 0,
   },
   paymentTotal: {
     flexDirection: 'row',
@@ -881,59 +986,79 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   paymentTotalLabel: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#9BA1A6',
+    letterSpacing: 0,
   },
   paymentTotalAmount: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 24,
+    fontWeight: '700',
     color: '#22C55E',
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
   },
   paymentActions: {
-    flexDirection: 'row',
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 32,
-    gap: 16,
+    paddingTop: 8,
+    paddingBottom: 28,
+    alignItems: 'center',
   },
   cancelButton: {
     flex: 1,
-    backgroundColor: '#2A2A2A',
-    borderRadius: 16,
+    backgroundColor: 'transparent',
+    borderRadius: 14,
     paddingVertical: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#404040',
+    borderWidth: 1.5,
+    borderColor: '#3A3A3A',
   },
   cancelButtonText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#9BA1A6',
+    color: '#FFFFFF',
   },
   completeButton: {
-    flex: 1,
+    width: 280,
     backgroundColor: '#3B82F6',
-    borderRadius: 16,
-    paddingVertical: 18,
-    flexDirection: 'row',
+    borderRadius: 14,
+    paddingVertical: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
     shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 6,
   },
   completeButtonText: {
-    fontSize: 16,
+    fontSize: 25,
     fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: -0.2,
+    letterSpacing: 0.5,
+  },
+  successContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  successCircle: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: '#22C55E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#22C55E',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  successText: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#22C55E',
+    marginTop: 20,
+    letterSpacing: -0.5,
   },
 });
 

@@ -1,6 +1,8 @@
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { ArrowRightIcon } from '@/components/ui/arrow-right-icon';
 import { Colors } from '@/constants/theme';
+// eslint-disable-next-line import/namespace
 import { dbService, Supplier } from '@/services/database';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
@@ -19,16 +21,17 @@ function SupplierRow({ supplier, onPress, onLongPress, onOrderPress }: SupplierR
   return (
     <TouchableOpacity
       activeOpacity={0.8}
-      style={[styles.row, { backgroundColor: '#2A2A2A' }]}
+      style={[styles.row, { backgroundColor: '#1F1F1F' }]}
       onPress={() => onPress(supplier)}
       onLongPress={() => onLongPress(supplier)}
     >
       <View style={styles.rowLeft}>
-        <View style={[styles.rowIconWrap, { backgroundColor: '#3A3A3A' }]}>
-          <IconSymbol name="person.fill" size={24} color="#FFFFFF" />
+        <View style={[styles.rowIconWrap, { backgroundColor: '#3B82F6' }]}>
+          <IconSymbol name="person.fill" size={22} color="#FFFFFF" />
         </View>
         <View style={styles.rowContent}>
           <ThemedText style={styles.rowTitle}>{supplier.name}</ThemedText>
+          <ThemedText style={styles.rowSubtitle} darkColor="#9BA1A6">Tap for details</ThemedText>
         </View>
       </View>
       <TouchableOpacity 
@@ -36,7 +39,7 @@ function SupplierRow({ supplier, onPress, onLongPress, onOrderPress }: SupplierR
         activeOpacity={0.7}
         onPress={() => onOrderPress(supplier)}
       >
-        <IconSymbol name="cart.fill" size={20} color="white" />
+        <ArrowRightIcon size={20} color="#3B82F6" />
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -163,7 +166,7 @@ export default function SuppliersScreen() {
     // Show supplier information
     Alert.alert(
       supplier.name,
-      `📞 Phone: ${supplier.phoneNumber}\n💬 WhatsApp: ${supplier.whatsappNumber}${supplier.email ? `\n📧 Email: ${supplier.email}` : ''}`,
+      `Phone: ${supplier.phoneNumber}\nWhatsApp: ${supplier.whatsappNumber}${supplier.email ? `\nEmail: ${supplier.email}` : ''}`,
       [{ text: 'OK' }]
     );
   };
@@ -382,10 +385,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     borderRadius: 16,
     marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
   },
   rowLeft: {
     flexDirection: 'row',
@@ -393,25 +398,34 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   rowIconWrap: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 20,
   },
   rowContent: {
     flex: 1,
   },
   rowTitle: {
-    fontWeight: '700',
-    fontSize: 18,
-    marginBottom: 4,
+    fontWeight: '600',
+    fontSize: 19,
+    marginBottom: 1,
+    letterSpacing: 0.2,
+  },
+  rowSubtitle: {
+    fontSize: 13,
+    opacity: 0.7,
   },
   orderButton: {
-    padding: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 8,
   },
   floatingAddButton: {
     position: 'absolute',
