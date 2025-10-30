@@ -1,4 +1,4 @@
-# InVo – Master README (All-In-One Documentation) 🚀
+# InVo – Effortless Inventory Mastery 🚀
 
 Modern, AI-powered inventory management built with React Native (Expo), TypeScript, and SQLite. This README is the single source of truth for setup, architecture, features, workflows, build, troubleshooting, and operational details.
 
