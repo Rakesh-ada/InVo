@@ -214,7 +214,7 @@ Artifacts appear in the EAS dashboard. Native Gradle project is present under `a
 
 Pre-built Applications
 
-- Android APK: [Download Latest APK](https://github.com/Rakesh-ada/InVo/releases/latest/download/invo-android.apk)
+- Android APK: [Download Latest APK](https://github.com/Rakesh-ada/InVo/releases/tag/v2.5/Invo_2.5.apk)
 - iOS App: Coming soon
 - Expo Go: [Try in Expo Go](https://expo.dev/@Rakesh-ada/invo)
 
