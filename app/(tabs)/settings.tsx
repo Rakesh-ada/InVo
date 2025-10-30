@@ -324,7 +324,7 @@ export default function SettingsScreen() {
             >
               <View style={styles.settingLeft}>
                 <AIIcon size={20} color="#FFFFFF" />
-                <ThemedText style={styles.settingLabel}>Ask InVo AI</ThemedText>
+                <ThemedText style={styles.settingLabel}>Ask AI</ThemedText>
               </View>
               <IconSymbol name="chevron.right" size={16} color="#9BA1A6" />
             </TouchableOpacity>
@@ -443,14 +443,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   businessNameInput: {
-    fontSize: 16,
+    fontSize: 17,
     color: '#FFFFFF',
-    backgroundColor: '#2A2A2A',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
+    paddingVertical: 4,
     minWidth: 150,
-    textAlign: 'center',
+    textAlign: 'right',
+    fontWeight: '500',
   },
   qrImageContainer: {
     width: 48,

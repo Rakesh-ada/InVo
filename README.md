@@ -1,277 +1,301 @@
-# InVo - Advanced Inventory Management System 🚀
+# InVo – Master README (All-In-One Documentation) 🚀
 
-[![Download Latest](https://img.shields.io/badge/Download-Latest%20Release-blue?style=for-the-badge&logo=github)](https://github.com/yourusername/InVo/releases/latest)
-[![Android APK](https://img.shields.io/badge/Android-APK%20Download-green?style=for-the-badge&logo=android)](https://github.com/yourusername/InVo/releases/latest/download/invo-android.apk)
-[![Expo](https://img.shields.io/badge/Expo-Try%20Now-black?style=for-the-badge&logo=expo)](https://expo.dev/@yourusername/invo)
+Modern, AI-powered inventory management built with React Native (Expo), TypeScript, and SQLite. This README is the single source of truth for setup, architecture, features, workflows, build, troubleshooting, and operational details.
 
-**InVo** is a comprehensive, AI-powered inventory management application built with React Native and Expo. It provides businesses with intelligent inventory tracking, sales analytics, supplier management, and AI-driven insights to optimize operations and maximize profitability.
+[![Download Latest](https://img.shields.io/badge/Download-Latest%20Release-blue?style=for-the-badge&logo=github)](https://github.com/Rakesh-ada/InVo/releases/latest)
+[![Android APK](https://img.shields.io/badge/Android-APK%20Download-green?style=for-the-badge&logo=android)](https://github.com/Rakesh-ada/InVo/releases/latest/download/invo-android.apk)
+[![Expo](https://img.shields.io/badge/Expo-Try%20Now-black?style=for-the-badge&logo=expo)](https://expo.dev/@Rakesh-ada/invo)
 
-## 🌟 Key Features
+## Contents
 
-### 📊 **Smart Dashboard**
-- **Real-time Analytics**: Live inventory metrics, sales performance, and business insights
-- **Interactive Charts**: Visual representation of sales trends, inventory levels, and revenue
-- **Quick Actions**: Fast access to frequently used features
-- **Customizable Metrics**: Personalized dashboard with favorite KPIs
-- **Low Stock Alerts**: Automated notifications for items running low
-- **Out-of-Stock Tracking**: Immediate visibility of unavailable products
+- Overview
+- Features (Product, POS, Suppliers, AI, Reports)
+- Architecture & Directory Reference
+- Data Model (SQLite schema)
+- Services (database, AI, vector store, analytics cache, reports)
+- App Screens & UX
+- Environment & Configuration
+- Development (run, debug, test-like checks)
+- Build & Release (Expo/EAS, Android)
+- Performance & Size Optimization
+- Security & Privacy
+- Troubleshooting & FAQ
+- Maintenance & Contribution
 
-### 📦 **Product Management**
-- **Complete Product Lifecycle**: Add, edit, delete, and track products
-- **Image Support**: Product photos with camera integration
-- **Expiry Date Tracking**: Monitor product expiration dates
-- **Price Management**: Set buying and selling prices with profit calculations
-- **Stock Levels**: Real-time quantity tracking
-- **Bulk Operations**: Add multiple products efficiently
-- **Search & Filter**: Quick product discovery
+## Overview
 
-### 🛒 **Point of Sale (POS)**
-- **Shopping Cart**: Add products to cart with quantity selection
-- **QR Code Payments**: Integrated payment system with QR code scanning
-- **Sales Processing**: Complete transaction management
-- **Receipt Generation**: Automatic receipt creation
-- **Payment Tracking**: Monitor payment methods and amounts
+InVo helps small businesses track products, sales, and suppliers, with AI-assisted insights and weekly reporting. It is offline-first and stores data locally using SQLite.
 
-### 🤖 **AI-Powered Intelligence**
-- **Smart Analytics**: AI-driven insights into inventory patterns
-- **Demand Forecasting**: Predict future demand using sales trends
-- **Stock Optimization**: Prevent over/understocking with AI recommendations
-- **Automated Alerts**: Smart restocking recommendations
-- **Profit Optimization**: Pricing and profitability analysis
-- **Business Intelligence**: Data-driven decision support
-- **Natural Language Queries**: Ask questions about your business in plain English
+## Features
 
-### 👥 **Supplier Management**
-- **Supplier Database**: Complete supplier information management
-- **Contact Details**: Phone numbers, addresses, and communication history
-- **Order Tracking**: Monitor supplier orders and deliveries
-- **Purchase Orders**: Generate and track purchase orders
-- **Supplier Performance**: Track supplier reliability and quality
+- Dashboard: KPIs, low/out-of-stock signals, quick actions
+- Products: CRUD, unit, expiry, pricing, image URI
+- POS (Explore): Cart, stock checks, sales posting, QR payment flow
+- Suppliers: Directory, order builder, call/WhatsApp actions
+- AI Chat: Gemini-backed insights using semantic context (RAG)
+- Weekly Report: In-app generated PDF summary
+- Settings: Business profile and QR payment image
 
-### 📈 **Advanced Reporting**
-- **Weekly Reports**: Comprehensive business performance analysis
-- **Sales Analytics**: Detailed sales trends and patterns
-- **Inventory Reports**: Stock levels, turnover rates, and valuation
-- **PDF Export**: Generate and share professional reports
-- **Chart Visualizations**: Interactive graphs and charts
-- **Custom Date Ranges**: Flexible reporting periods
+### Smart Dashboard
 
-### ⚙️ **Settings & Configuration**
-- **Business Profile**: Company name, logo, and branding
-- **Payment Setup**: QR code payment configuration
-- **User Preferences**: Customizable app settings
-- **Data Management**: Export/import capabilities
-- **Security Settings**: Data protection and privacy controls
+- Real-time analytics: inventory metrics, sales performance, insights
+- Interactive charts and customizable metrics
+- Low stock alerts and out-of-stock tracking
 
-## 🛠️ **Technical Features**
+### Product Management
 
-### **Database & Storage**
-- **SQLite Integration**: Local database for offline functionality
-- **Data Persistence**: Secure data storage with AsyncStorage
-- **Real-time Sync**: Instant updates across all screens
-- **Data Backup**: Automatic data protection
+- Complete lifecycle: add, edit, delete, track
+- Image support, expiry dates, buying/selling price, units, stock levels
+- Bulk operations and fast search/filter
 
-### **Performance Optimizations**
-- **Bundle Size Optimization**: Reduced APK size by 40-65%
-- **ProGuard/R8**: Code shrinking and obfuscation
-- **Asset Optimization**: Compressed images and resources
-- **Metro Bundler**: Optimized JavaScript bundling
-- **Tree Shaking**: Removed unused code and dependencies
+### Point of Sale (POS)
 
-### **User Experience**
-- **Dark Theme**: Modern, eye-friendly interface
-- **Responsive Design**: Optimized for all screen sizes
-- **Gesture Support**: Intuitive touch interactions
-- **Haptic Feedback**: Tactile response for better UX
-- **Accessibility**: Screen reader support and accessibility features
+- Cart with quantity controls and stock validation
+- QR code payment flow, sales processing, basic receipt concept
+- Tracks payment completion and updates inventory + sales
 
-## 📱 **Screens & Navigation**
+### AI-Powered Intelligence
 
-### **Main Tabs**
-1. **🏠 Dashboard**: Overview of business metrics and quick actions
-2. **📦 Products**: Complete product management interface
-3. **🛒 Explore**: Point of sale and shopping cart functionality
-4. **⚙️ Settings**: App configuration and additional features
+- AI insights, demand forecasting, stock optimization, alerts
+- Profitability analysis and simple business intelligence
+- Natural language queries powered by Gemini
 
-### **Additional Screens**
-- **🤖 AI Chat**: Interactive AI assistant for business insights
-- **👥 Suppliers**: Supplier management and order tracking
-- **📊 Weekly Report**: Comprehensive business analytics
-- **📱 Onboarding**: First-time user setup and configuration
+### Supplier Management
 
-## 📱 **Download & Install**
+- Supplier directory and contact details
+- Order builder with chips/suggestions
+- Call and WhatsApp actions
 
-### **Pre-built Applications**
-- **Android APK**: [Download Latest APK](https://github.com/yourusername/InVo/releases/latest/download/invo-android.apk)
-- **iOS App**: [Download from App Store](https://apps.apple.com/app/invo-inventory-management) *(Coming Soon)*
-- **Expo Go**: [Try in Expo Go](https://expo.dev/@yourusername/invo)
+### Advanced Reporting
 
-### **Direct Downloads**
-- **Latest Release**: [Download v1.0.0](https://github.com/yourusername/InVo/releases/latest)
-- **All Releases**: [View All Downloads](https://github.com/yourusername/InVo/releases)
+- Weekly report generation with charts and alerts (PDF via Expo)
+- Sales analytics and inventory reports
 
-## 🚀 **Getting Started**
+### Settings & Configuration
 
-### **Prerequisites**
-- Node.js (v18 or higher)
-- npm or yarn
+- Business profile
+- QR payment image configuration
+
+## Architecture & Directory Reference
+
+- `app/`: Screens via Expo Router (tabs + standalone screens)
+- `components/`: Reusable UI (icons, charts, cards)
+- `services/`: Core logic and data access
+  - `database.ts`: SQLite access, schema, CRUD, sales tracking
+  - `gemini.ts`: AI chat orchestration, RAG, prompt shaping
+  - `vector-store.ts`: Lightweight embeddings + semantic search
+  - `analytics-cache.ts`: Cached KPIs with TTL
+  - `weekly-report.ts`: PDF report generator (Expo Print/Sharing)
+- `assets/`: Images and fonts
+- `android/`: Native Android config and build output (Gradle)
+
+Key screens
+
+- `app/(tabs)/dashboard.tsx` – metrics and quick actions
+- `app/(tabs)/products.tsx` – product management
+- `app/(tabs)/explore.tsx` – POS/cart and payment modal
+- `app/supplier-order.tsx` – supplier order builder with search
+- `app/weekly-report.tsx` – weekly analytics
+- `app/ai-chat.tsx` – AI assistant (Gemini)
+
+### Screens & Navigation
+
+Main Tabs
+
+1. Dashboard – Overview of business metrics and quick actions
+2. Products – Product management interface
+3. Explore – POS and cart
+4. Settings – App configuration
+
+Additional Screens
+
+- AI Chat – Assistant for insights
+- Suppliers – Management and orders
+- Weekly Report – Analytics
+- Onboarding – First-time setup
+
+## Data Model (SQLite)
+
+Tables are created automatically on first run.
+
+- `products(id, name, buyingPrice, sellingPrice, quantity, unit, expiryDate, imageUri, addedDate)`
+- `sales(id, productId, quantitySold, totalAmount, saleDate)`
+- `suppliers(id, name, phoneNumber, whatsappNumber, email, addedDate)`
+- `cart_items(id, name, qty, price)`
+
+Indexes
+
+- `idx_products_name` on `products(name)`
+- `idx_products_addedDate` on `products(addedDate)`
+
+Migrations
+
+- `unit` column auto-added when missing. `DatabaseService` includes retries, health checks, and a `resetDatabase()` utility for schema mismatches.
+
+## Services
+
+- Database (`services/database.ts`)
+  - Robust init with retries; CRUD for products and suppliers
+  - Sales tracking (`recordSale`, listing, daily totals)
+  - Health + stats helpers, bulk insert, search
+- AI (`services/gemini.ts`)
+  - Uses `EXPO_PUBLIC_GEMINI_API_KEY`
+  - Builds enhanced prompts with: semantic context, cached analytics, and sales
+  - Read-only assistant; includes backoff/retry for 503s and streaming simulation
+- Vector Store (`services/vector-store.ts`)
+  - Simple 128-dim embeddings persisted in `AsyncStorage`
+  - Regeneration on version change; cosine similarity search
+- Analytics Cache (`services/analytics-cache.ts`)
+  - TTL-based cache for KPIs (products, stock, value, margins)
+- Weekly Report (`services/weekly-report.ts`)
+  - Generates a polished PDF with metrics, charts, and alerts via Expo Print/Sharing
+
+## App Screens & UX Notes
+
+- POS safeguards inventory: prevents adding over stock, validates at payment, updates inventory and records sales, stores a daily summary in `AsyncStorage(@daily_sales_data)` for dashboard.
+- Supplier Order includes a header search toggle and suggestion chips to quickly add items.
+- Payment Modal supports a QR image from Settings; nice success animation and Done button.
+
+## Environment & Configuration
+
+Create `.env` with:
+
+```
+EXPO_PUBLIC_GEMINI_API_KEY=your_gemini_api_key
+```
+
+Other storage keys
+
+- `@invo_settings`: JSON with `businessName`, `qrPaymentImageUri`
+- `@daily_sales_data`: array used by dashboard/analytics
+
+## Development
+
+Prerequisites
+
+- Node 18+, npm
 - Expo CLI
-- Android Studio (for Android development)
-- Xcode (for iOS development)
+- Android Studio (emulator) or a device with Expo Go
 
-### **Installation**
+Install & Run
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd InVo
-   ```
-
-2. **Install dependencies**
-   ```bash
+```
    npm install
-   ```
-
-3. **Configure environment variables**
-   ```bash
-   # Create .env file
-   EXPO_PUBLIC_GEMINI_API_KEY=your_gemini_api_key_here
-   ```
-
-4. **Start the development server**
-   ```bash
    npx expo start
    ```
 
-### **Building for Production**
+Useful scripts
 
-#### **Android APK**
-```bash
-# Build optimized APK
+- Dev: `npx expo start -c` (clean cache)
+- Android: `npm run android` (if defined) or press `a` in Expo CLI
+
+TypeScript & Lint
+
+- TS config at `tsconfig.json`; ESLint at `eslint.config.js`
+
+## Build & Release
+
+Using EAS (recommended)
+
+```
+# Login once
+eas login
+
+# Configure
+eas build:configure
+
+# Production Android build (APK/AAB per eas.json)
 eas build --platform android --profile production
 ```
 
-#### **iOS App**
-```bash
-# Build iOS app
-eas build --platform ios --profile production
-```
+Artifacts appear in the EAS dashboard. Native Gradle project is present under `android/` for advanced configuration (ProGuard/R8 enabled by default in release).
 
-## 🔧 **Configuration**
+## Download & Install
 
-### **AI Integration**
-- Configure Gemini API key in environment variables
-- AI features require valid API key for full functionality
-- Fallback to basic features if AI is not configured
+Pre-built Applications
 
-### **Database Setup**
-- SQLite database is automatically created on first launch
-- No manual database configuration required
-- Data is stored locally on device
+- Android APK: [Download Latest APK](https://github.com/Rakesh-ada/InVo/releases/latest/download/invo-android.apk)
+- iOS App: Coming soon
+- Expo Go: [Try in Expo Go](https://expo.dev/@Rakesh-ada/invo)
 
-### **Asset Optimization**
-- Images are automatically optimized during build
-- Unused assets are excluded from final bundle
-- ProGuard/R8 reduces code size significantly
+Direct Downloads
 
-## 📊 **Performance Metrics**
+- Latest Release: [Releases](https://github.com/Rakesh-ada/InVo/releases/latest)
+- All Releases: [All Downloads](https://github.com/Rakesh-ada/InVo/releases)
 
-### **Bundle Size Optimization**
-- **Before**: 96 MB APK
-- **After**: 35-55 MB APK (40-65% reduction)
-- **Dependencies Removed**: 4 unused packages
-- **Assets Optimized**: Removed unused images and resources
+## Performance & Size Optimization
 
-### **Build Optimizations**
-- ProGuard/R8 code shrinking enabled
-- Resource shrinking for unused assets
-- Metro bundler optimizations
-- Tree shaking for dead code elimination
+- R8/ProGuard code shrinking and obfuscation for Android release
+- Asset trimming and compression; avoid unused images
+- UI rendering optimized with React hooks and memoization where needed
+- Lightweight vector store and cached analytics to reduce DB load
 
-## 🎯 **Business Benefits**
+## Security & Privacy
 
-### **Efficiency Gains**
-- **50% faster** inventory management
-- **Real-time insights** for better decision making
-- **Automated alerts** prevent stockouts
-- **AI recommendations** optimize inventory levels
+- All business data is stored locally on-device (SQLite/AsyncStorage)
+- No cloud dependency required for core features
+- API key is public-scope (Expo) and used client-side for Gemini; treat accordingly
 
-### **Cost Savings**
-- **Reduce waste** with expiry date tracking
-- **Optimize pricing** with AI insights
-- **Prevent overstocking** with demand forecasting
-- **Streamline operations** with integrated POS
+## Troubleshooting & FAQ
 
-### **Growth Support**
-- **Scalable architecture** supports business growth
-- **Advanced analytics** identify opportunities
-- **Supplier management** improves relationships
-- **Professional reporting** for stakeholders
+- App opens but data doesn’t appear
+  - Try clearing Metro cache: `npx expo start -c`
+  - Reinstall app to reset local DB
+- Database schema errors (e.g., missing columns)
+  - Call `dbService.resetDatabase()` from a temporary button/handler in dev
+- Gemini errors / overloaded
+  - Service retries with backoff; ensure `EXPO_PUBLIC_GEMINI_API_KEY` is valid
+- Android build too large
+  - Ensure release build with R8; remove unused assets
 
-## 🔒 **Security & Privacy**
+## Maintenance & Contribution
 
-- **Local Data Storage**: All data stored securely on device
-- **No Cloud Dependencies**: Complete offline functionality
-- **Data Encryption**: Sensitive information protected
-- **Privacy First**: No data collection or tracking
+Branching
 
-## 🛠️ **Development**
+- `master` is stable; feature branches via PRs
 
-### **Tech Stack**
-- **Framework**: React Native with Expo
-- **Language**: TypeScript
-- **Database**: SQLite with Expo SQLite
-- **AI**: Google Gemini API
-- **Navigation**: Expo Router
-- **UI**: Custom components with React Native
+Code Style
 
-### **Architecture**
-- **Modular Design**: Separated concerns with services
-- **Type Safety**: Full TypeScript implementation
-- **State Management**: React hooks and context
-- **Performance**: Optimized rendering and memory usage
+- TypeScript-first; clear variable names; shallow control flow; meaningful error logs
 
-## 📈 **Future Roadmap**
+PR Checklist
 
-### **Planned Features**
-- **Multi-location Support**: Manage multiple store locations
-- **Advanced Analytics**: Machine learning insights
-- **Cloud Sync**: Optional cloud backup and sync
-- **Barcode Scanning**: Product identification via barcodes
-- **Integration APIs**: Connect with external systems
-- **Multi-user Support**: Team collaboration features
+- Focused changes, TS-safe, no linter errors, tested on device/emulator
 
-## 🤝 **Contributing**
+License
 
-We welcome contributions! Please see our contributing guidelines for details.
+- MIT (add a LICENSE file if distributing)
 
-### **Development Setup**
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+—
 
-## 📄 **License**
+InVo – Effortless Inventory Mastery
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+## Business Benefits
 
-## 🆘 **Support**
+Efficiency Gains
 
-For support and questions:
-- **Documentation**: Check this README and inline code comments
-- **Issues**: Report bugs via GitHub issues
-- **Community**: Join our Discord community
+- Faster inventory ops, real-time insights, automated alerts, AI recommendations
 
-## 🙏 **Acknowledgments**
+Cost Savings
 
-- **Expo Team**: For the amazing development platform
-- **React Native Community**: For the robust ecosystem
-- **Google Gemini**: For AI capabilities
-- **Open Source Contributors**: For the libraries and tools
+- Reduce waste via expiry tracking, optimize pricing, prevent overstocking
 
----
+Growth Support
 
-**InVo** - *Effortless Inventory Mastery* 🚀
+- Scalable architecture, advanced analytics, supplier management, professional reporting
 
-*Built with ❤️ for modern businesses*
+## Contributing
+
+We welcome contributions. Suggested flow:
+
+1. Fork repository
+2. Create feature branch
+3. Implement and test changes
+4. Open a pull request
+
+## Acknowledgments
+
+- Expo Team
+- React Native Community
+- Google Gemini
+- Open Source contributors

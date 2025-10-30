@@ -1,9 +1,10 @@
+// ExploreScreen.tsx - Complete with Integrated Search
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 // eslint-disable-next-line import/namespace
-import { Product as DBProduct, dbService } from '@/services/database';
-import { SearchIcon } from '@/components/ui/search-icon';
 import { DeleteIcon } from '@/components/ui/delete-icon';
+import { SearchIcon } from '@/components/ui/search-icon';
+import { Product as DBProduct, dbService } from '@/services/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -12,10 +13,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 type CartItem = { id: string; name: string; qty: number; price: number };
 
-
 const CART_STORAGE_KEY = '@cart_items';
 
-// Search Bar Component - moved outside to prevent re-creation
+// ============================================================================
+// SEARCH BAR COMPONENT
+// ============================================================================
+
 const SearchBarComponent = React.memo(({ 
   query, 
   onChangeText, 
@@ -57,11 +60,20 @@ const SearchBarComponent = React.memo(({
 
 SearchBarComponent.displayName = 'SearchBarComponent';
 
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+
 export default function ExploreScreen() {
-  const [query, setQuery] = useState('');
+  // Cart state
   const [cart, setCart] = useState<CartItem[]>([]);
   const [products, setProducts] = useState<DBProduct[]>([]);
+  
+  // Search state
+  const [query, setQuery] = useState('');
   const [isSearchActive, setIsSearchActive] = useState(false);
+  
+  // Payment modal state
   const [isPaymentModalVisible, setIsPaymentModalVisible] = useState(false);
   const [settings, setSettings] = useState<{qrPaymentImageUri?: string; businessName?: string}>({});
   const [paymentSuccess, setPaymentSuccess] = useState(false);
@@ -71,6 +83,10 @@ export default function ExploreScreen() {
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const successScaleAnim = useRef(new Animated.Value(0)).current;
   const successRotateAnim = useRef(new Animated.Value(0)).current;
+
+  // ============================================================================
+  // DATA LOADING FUNCTIONS
+  // ============================================================================
 
   // Save cart to AsyncStorage
   const saveCartToStorage = useCallback(async (cartData: CartItem[]) => {
@@ -134,11 +150,49 @@ export default function ExploreScreen() {
     }, [loadProducts])
   );
 
+  // ============================================================================
+  // SEARCH FUNCTIONS
+  // ============================================================================
+
+  // Toggle search bar visibility
+  const toggleSearch = useCallback(() => {
+    setIsSearchActive(prev => {
+      const newState = !prev;
+      if (newState === false) {
+        setQuery(''); // Clear query when closing search
+      }
+      return newState;
+    });
+  }, []);
+
+  // Filter products based on search query
   const suggestions = useMemo(() => {
     if (!query || query.trim() === '') return [] as DBProduct[];
     const q = query.trim().toLowerCase();
-    return products.filter(p => p.name.toLowerCase().includes(q) && p.quantity > 0).slice(0, 5);
+    return products
+      .filter(p => p.name.toLowerCase().includes(q) && p.quantity > 0)
+      .slice(0, 5);
   }, [query, products]);
+
+  // Add product to cart from search query
+  const addByQuery = useCallback(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return;
+    
+    // Try exact match first, then fall back to first suggestion
+    const match = products.find(p => 
+      p.name.toLowerCase() === q && p.quantity > 0
+    ) || suggestions[0];
+    
+    if (!match) return;
+    
+    addToCart(match);
+    setQuery('');
+  }, [query, products, suggestions]);
+
+  // ============================================================================
+  // CART FUNCTIONS
+  // ============================================================================
 
   const addToCart = (product: DBProduct) => {
     if (!product || product.quantity <= 0) {
@@ -173,16 +227,6 @@ export default function ExploreScreen() {
     });
   };
 
-  const addByQuery = () => {
-    const q = query.trim().toLowerCase();
-    if (!q) return;
-    const match = products.find(p => p.name.toLowerCase() === q && p.quantity > 0) || suggestions[0];
-    if (!match) return;
-    
-    addToCart(match);
-    setQuery('');
-  };
-
   const increment = (id: string) => {
     const product = products.find(p => p.id === id);
     const cartItem = cart.find(c => c.id === id);
@@ -213,6 +257,10 @@ export default function ExploreScreen() {
   };
 
   const total = useMemo(() => cart.reduce((sum, c) => sum + c.qty * c.price, 0), [cart]);
+
+  // ============================================================================
+  // PAYMENT FUNCTIONS
+  // ============================================================================
 
   const proceed = async () => {
     if (cart.length === 0) return;
@@ -355,24 +403,9 @@ export default function ExploreScreen() {
     }, 2000);
   };
 
-  const toggleSearch = () => {
-    setIsSearchActive(!isSearchActive);
-    if (!isSearchActive) {
-      setQuery('');
-    }
-  };
-
-  // ---- Design tokens ----
-  const t = tokens;
-
-  // ---- Modular components ----
-  const SectionHeader = ({ title }: { title: string }) => (
-    <View style={{ marginVertical: 8 }}>
-      <ThemedText style={{ fontWeight: '700', fontSize: 16 }}>{title}</ThemedText>
-    </View>
-  );
-
-
+  // ============================================================================
+  // RENDER COMPONENTS
+  // ============================================================================
 
   const CartItemRow = ({ item }: { item: CartItem }) => {
     const product = products.find(p => p.id === item.id);
@@ -428,9 +461,13 @@ export default function ExploreScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
         <View style={styles.content}>
+          {/* Header with Search Toggle */}
           <View style={styles.header}>
-            <ThemedText style={{ fontSize: 32, fontWeight: 'bold', color: '#FFFFFF', opacity: 1 ,paddingBottom: 4,paddingTop: 4,paddingHorizontal: 10}}>Cart</ThemedText>
+            <ThemedText style={{ fontSize: 32, fontWeight: 'bold', color: '#FFFFFF', opacity: 1, paddingBottom: 4, paddingTop: 4, paddingHorizontal: 10 }}>
+              Cart
+            </ThemedText>
             <View style={styles.headerRight}>
+              {/* Search Toggle Button */}
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityLabel="Toggle search"
@@ -439,6 +476,8 @@ export default function ExploreScreen() {
               >
                 <SearchIcon size={20} color={isSearchActive ? '#3B82F6' : '#9BA1A6'} />
               </TouchableOpacity>
+
+              {/* Clear Cart Button */}
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityLabel="Clear cart"
@@ -451,12 +490,15 @@ export default function ExploreScreen() {
               >
                 <DeleteIcon size={20} color={cart.length === 0 ? '#6B7280' : '#FCA5A5'} />
               </TouchableOpacity>
+
+              {/* Cart Count Badge */}
               <View style={styles.countBadge}>
                 <ThemedText style={styles.countBadgeText}>{cart.reduce((s, c) => s + c.qty, 0)}</ThemedText>
               </View>
             </View>
           </View>
 
+          {/* Search Bar - Conditional */}
           {isSearchActive && (
             <SearchBarComponent 
               query={query} 
@@ -464,17 +506,26 @@ export default function ExploreScreen() {
               onSubmitEditing={addByQuery} 
             />
           )}
+
+          {/* Suggestions Bar - Conditional */}
           {isSearchActive && suggestions.length > 0 && (
             <View style={styles.suggestionBar}>
               {suggestions.map(s => (
-                <TouchableOpacity key={s.id} style={styles.suggestionChip} onPress={() => { addToCart(s); setQuery(''); }}>
+                <TouchableOpacity 
+                  key={s.id} 
+                  style={styles.suggestionChip} 
+                  onPress={() => { 
+                    addToCart(s); 
+                    setQuery(''); 
+                  }}
+                >
                   <ThemedText>{s.name}</ThemedText>
                 </TouchableOpacity>
               ))}
             </View>
           )}
 
-          
+          {/* Cart Items List */}
           <View style={[styles.cartBox, styles.cartBoxFilled]}>
             {cart.length === 0 ? (
               <View style={styles.emptyCartContainer}>
@@ -501,6 +552,7 @@ export default function ExploreScreen() {
           </View>
         </View>
 
+        {/* Bottom Section - Total and Proceed */}
         <View style={styles.bottomSection}>
           <View style={styles.totalRow}>
             <ThemedText style={styles.totalLabel}>Total</ThemedText>
@@ -524,7 +576,7 @@ export default function ExploreScreen() {
       <Modal
         visible={isPaymentModalVisible}
         transparent={true}
-        animationType="fade"
+        animationType="slide"
         onRequestClose={handlePaymentCancel}
       >
         <View style={styles.modalOverlay}>
@@ -613,6 +665,10 @@ export default function ExploreScreen() {
   );
 }
 
+// ============================================================================
+// STYLES
+// ============================================================================
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#121212' },
   container: { flex: 1, padding: 16 },
@@ -624,8 +680,21 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#2A2A2A',
   },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15, marginTop: 50 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8, marginRight: 5 },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    marginBottom: 15, 
+    marginTop: 50 
+  },
+  headerRight: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 8, 
+    marginRight: 5 
+  },
+  
+  // Search Styles
   searchToggleBtn: { 
     width: 46,
     height: 46,
@@ -638,39 +707,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
-  },
-  clearBtn: { 
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#2A2A2A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-  countBadge: { 
-    width: 46, 
-    height: 46, 
-    borderRadius: 23, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    backgroundColor: '#2A2A2A', 
-    borderWidth: 2, 
-    borderColor: '#3b82f6',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-  countBadgeText: { color: '#3b82f6', fontWeight: '700', fontSize: 14 },
-  headerIcon: {
-    width: 20,
-    height: 20,
   },
   searchWrap: { 
     marginBottom: 0,
@@ -706,12 +742,79 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginLeft: 10,
   },
+  suggestionBar: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: 10, 
+    marginBottom: 0, 
+    marginTop: 15,
+    marginHorizontal: 10,
+  },
+  suggestionChip: { 
+    backgroundColor: '#1A1A1A', 
+    paddingHorizontal: 10, 
+    paddingVertical: 6, 
+    borderRadius: 999,
+  },
+  
+  // Other Buttons
+  clearBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#2A2A2A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  countBadge: { 
+    width: 46, 
+    height: 46, 
+    borderRadius: 23, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    backgroundColor: '#2A2A2A', 
+    borderWidth: 2, 
+    borderColor: '#3b82f6',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  countBadgeText: { color: '#3b82f6', fontWeight: '700', fontSize: 14 },
+  
+  // Cart Styles
   section: { marginVertical: 10, fontWeight: '700' },
-  suggestionBar: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 0, marginTop: 15,marginHorizontal: 10 },
-  suggestionChip: { backgroundColor: '#1A1A1A', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
-  cartBox: { backgroundColor: 'transparent', borderRadius: 14, padding: 12, paddingBottom:0, flex: 1, borderWidth: 0, borderColor: 'transparent', shadowOpacity: 0, elevation: 0 },
-  cartBoxFilled: { backgroundColor: 'transparent', borderRadius: 14, padding: 12, minHeight: 140, maxHeight: 420, shadowColor: 'transparent', shadowOpacity: 0, shadowRadius: 0, shadowOffset: { width: 0, height: 0 }, elevation: 0, borderWidth: 0, borderColor: 'transparent' },
-  cartBoxEmpty: { backgroundColor: 'transparent', borderRadius: 14, padding: 12, minHeight: 140, maxHeight: 380, alignItems: 'center', justifyContent: 'center', borderWidth: 0, borderColor: 'transparent', shadowOpacity: 0, elevation: 0 },
+  cartBox: { 
+    backgroundColor: 'transparent', 
+    borderRadius: 14, 
+    padding: 12, 
+    paddingBottom: 0, 
+    flex: 1, 
+    borderWidth: 0, 
+    borderColor: 'transparent', 
+    shadowOpacity: 0, 
+    elevation: 0 
+  },
+  cartBoxFilled: { 
+    backgroundColor: 'transparent', 
+    borderRadius: 14, 
+    padding: 12, 
+    minHeight: 140, 
+    maxHeight: 420, 
+    shadowColor: 'transparent', 
+    shadowOpacity: 0, 
+    shadowRadius: 0, 
+    shadowOffset: { width: 0, height: 0 }, 
+    elevation: 0, 
+    borderWidth: 0, 
+    borderColor: 'transparent' 
+  },
   cartRow: { 
     backgroundColor: '#1F1F1F', 
     borderRadius: 16, 
@@ -802,6 +905,8 @@ const styles = StyleSheet.create({
     opacity: 0.5,
     borderColor: '#6B7280',
   },
+  
+  // Total and Proceed Styles
   totalRow: { 
     flexDirection: 'row', 
     alignItems: 'center', 
@@ -826,6 +931,8 @@ const styles = StyleSheet.create({
     opacity: 1 
   },
   proceedText: { color: '#FFFFFF', fontWeight: '700', fontSize: 18 },
+  
+  // Empty Cart Styles
   emptyCartContainer: { 
     alignItems: 'center', 
     justifyContent: 'center', 
@@ -846,12 +953,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
+  
   // Payment Modal Styles
   modalOverlay: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    padding: 16,
   },
   modalBackdrop: {
     position: 'absolute',
@@ -863,15 +970,15 @@ const styles = StyleSheet.create({
   },
   paymentModal: {
     backgroundColor: '#1F1F1F',
-    borderRadius: 28,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     width: '100%',
-    maxWidth: 400,
-    maxHeight: '85%',
+    maxHeight: '90%',
     borderWidth: 0,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
     elevation: 12,
     overflow: 'hidden',
   },
@@ -911,7 +1018,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#9BA1A6',
     textAlign: 'center',
-    marginTop: 16,
+    marginTop: 4,
     marginBottom: 8,
     fontWeight: '500',
     lineHeight: 20,
@@ -920,21 +1027,21 @@ const styles = StyleSheet.create({
     fontSize: 36,
     color: '#FFFFFF',
     textAlign: 'center',
-    marginBottom: 28,
+    marginBottom: 12,
     fontWeight: '700',
     letterSpacing: -1,
     lineHeight: 42,
   },
   qrCodeContainer: {
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 4,
   },
   qrCodeImage: {
     width: 280,
     height: 280,
     borderRadius: 20,
     backgroundColor: '#FFFFFF',
-    padding: 12,
+    padding: 4,
   },
   qrCodePlaceholder: {
     width: 280,
@@ -1047,7 +1154,10 @@ const styles = StyleSheet.create({
   },
 });
 
-// Minimal design tokens for consistent spacing/colors
+// ============================================================================
+// DESIGN TOKENS
+// ============================================================================
+
 const tokens = {
   color: {
     muted: '#9BA1A6',

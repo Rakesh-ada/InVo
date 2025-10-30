@@ -14,12 +14,13 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 // Prevent splash screen from hiding automatically
 SplashScreen.preventAutoHideAsync();
 
-// Set default font family for all Text and TextInput components
-if (Text.defaultProps == null) Text.defaultProps = {};
-Text.defaultProps.style = { fontFamily: 'Roboto' };
-
-if (TextInput.defaultProps == null) TextInput.defaultProps = {};
-TextInput.defaultProps.style = { fontFamily: 'Roboto' };
+// Set default font family for all Text and TextInput components (TS-safe)
+const RNText: any = Text as any;
+const RNTextInput: any = TextInput as any;
+if (RNText?.defaultProps == null) RNText.defaultProps = {};
+if (RNTextInput?.defaultProps == null) RNTextInput.defaultProps = {};
+RNText.defaultProps.style = [RNText.defaultProps.style, { fontFamily: 'Roboto' }];
+RNTextInput.defaultProps.style = [RNTextInput.defaultProps.style, { fontFamily: 'Roboto' }];
 
 export const unstable_settings = {
   initialRouteName: 'index',

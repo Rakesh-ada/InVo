@@ -329,7 +329,7 @@ export default function SupplierOrderScreen() {
                   resizeMode="contain"
                 />
                 <ThemedText style={styles.emptyCartText}>No items in order</ThemedText>
-                <ThemedText style={styles.emptyCartSubtext}>Search and add products to create an order</ThemedText>
+                <ThemedText style={styles.emptyCartSubtext}>Add products to create an order</ThemedText>
               </View>
             ) : (
               <FlatList

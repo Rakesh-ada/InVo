@@ -115,7 +115,7 @@ export default function ProductsScreen() {
   const isDark = true;
   const bg = Colors.dark.background;
 
-  const UNIT_OPTIONS = ['pc','kg','g','lt','ml','box','pkt','set'];
+  const UNIT_OPTIONS = ['pc','kg','g','lt','ml','box','pkt'];
 
   const [products, setProducts] = useState<Product[]>([]);
   const [isAddOpen, setIsAddOpen] = useState(false);
