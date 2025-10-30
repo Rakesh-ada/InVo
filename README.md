@@ -6,7 +6,7 @@ Modern, AI-powered inventory management built with React Native (Expo), TypeScri
 [![Android APK](https://img.shields.io/badge/Android-APK%20Download-green?style=for-the-badge&logo=android)](https://github.com/Rakesh-ada/InVo/releases/latest/download/invo-android.apk)
 [![Expo](https://img.shields.io/badge/Expo-Try%20Now-black?style=for-the-badge&logo=expo)](https://expo.dev/@Rakesh-ada/invo)
 
- <p align="center">
+ <p>
    <img src="./assets/gif/ezgif-56dc875ea301bf.gif" alt="InVo demo" width="520" />
  </p>
 
