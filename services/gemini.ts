@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { analyticsCacheService } from './analytics-cache';
 import { dbService, Product } from './database';
 import { vectorStoreService } from './vector-store';
-import { analyticsCacheService } from './analytics-cache';
 
 export interface ChatMessage {
   id: string;
@@ -26,14 +26,22 @@ class GeminiService {
   private apiKey: string | undefined;
   private baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
   private searchUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent';
+  private embeddingUrl = 'https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent';
   private chatHistory: ChatMessage[] = [];
+  private conversationSummary: string = '';
+  private trackedEntities: Map<string, any> = new Map();
 
   constructor() {
-    this.apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+    // API key must be set via updateApiKey() method
+    this.apiKey = undefined;
   }
 
   isConfigured(): boolean {
     return !!this.apiKey;
+  }
+
+  updateApiKey(newApiKey: string): void {
+    this.apiKey = newApiKey;
   }
 
   async initializeChat(): Promise<void> {
@@ -46,8 +54,12 @@ class GeminiService {
     console.log('✅ Vector store initialized');
 
     const businessContext = await this.getComprehensiveBusinessContext();
+    const currentDateTime = new Date().toISOString();
     
     const contextMessage = `You are InVo AI - Advanced Inventory Intelligence Assistant
+
+CURRENT DATE & TIME: ${currentDateTime}
+⚠️ CRITICAL: Use this timestamp to identify expired products (expiryDate < current date)
 
 CORE CAPABILITIES:
 🧠 Smart Analytics: Real-time inventory insights and predictions
@@ -91,10 +103,19 @@ Ready to help optimize your inventory and boost business performance! What would
       throw new Error('Gemini API key not configured');
     }
 
+    // Sanitize input
+    const sanitizedMessage = this.sanitizeInput(message);
+    
+    // Track entities
+    this.trackEntities(sanitizedMessage);
+    
+    // Maintain conversation memory
+    await this.maintainConversationMemory();
+
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
       // Use semantic search to find relevant context (RAG)
-      const relevantContext = await vectorStoreService.getRelevantContext(message, 3);
+      const relevantContext = await vectorStoreService.getRelevantContext(sanitizedMessage, 3);
       console.log('🔍 Retrieved relevant context via semantic search');
       
       // Get cached analytics (reduces DB queries)
@@ -102,12 +123,18 @@ Ready to help optimize your inventory and boost business performance! What would
       const todaySales = await dbService.getTodaysSalesTotal();
       
       // Only fetch specific data based on query type
-      const queryType = this.detectQueryType(message);
+      const queryType = this.detectQueryType(sanitizedMessage);
       const specificContext = await this.getSpecificContext(queryType);
       
       const chatContext = this.getRecentChatContext();
+      const trackedContext = this.getTrackedContext();
+      const summaryContext = this.conversationSummary ? `\nCONVERSATION SUMMARY: ${this.conversationSummary}\n` : '';
+      const currentDateTime = new Date().toISOString();
       
-      const enhancedPrompt = `RELEVANT DATA (Semantic Search):
+      const enhancedPrompt = `CURRENT DATE & TIME: ${currentDateTime}
+⚠️ Use this to check if products are expired (expiryDate < current date)
+
+RELEVANT DATA (Semantic Search):
 ${relevantContext}
 
 ${specificContext}
@@ -118,7 +145,7 @@ CACHED ANALYTICS:
 • Stock Health: ${cachedAnalytics.stockHealth}
 • Today's Sales: ₹${todaySales.totalAmount}
 
-${chatContext ? `RECENT CONTEXT:\n${chatContext}\n\n` : ''}USER QUERY: "${message}"
+${summaryContext}${chatContext ? `RECENT CONTEXT:\n${chatContext}\n\n` : ''}${trackedContext ? `${trackedContext}\n\n` : ''}USER QUERY: "${sanitizedMessage}"
 
 INSTRUCTIONS:
 - Keep responses ULTRA-CONCISE (2-3 sentences max) but information-dense
@@ -142,6 +169,7 @@ CRITICAL - READ-ONLY MODE:
 `;
 
       // Build conversation history for context
+      const businessContext = await this.getComprehensiveBusinessContext();
       const contents = [
         // System context message
         {
@@ -204,11 +232,20 @@ CRITICAL - READ-ONLY MODE:
       // Remove bold markdown formatting (**text**)
       aiResponse = aiResponse.replace(/\*\*(.*?)\*\*/g, '$1');
       
+      // Validate response
+      const validation = this.validateResponse(aiResponse);
+      console.log(`✅ Response validation: confidence=${validation.confidence.toFixed(2)}, issues=${validation.issues.length}`);
+      
+      if (!validation.isValid) {
+        console.warn('⚠️ Low confidence response:', validation.issues);
+        aiResponse += `\n\n_Note: This response has ${Math.round(validation.confidence * 100)}% confidence. Please verify the information._`;
+      }
+      
       // Store in chat history
       this.chatHistory.push({
         id: Date.now().toString(),
         role: 'user',
-        content: message,
+        content: sanitizedMessage,
         timestamp: new Date(),
       });
       
@@ -262,9 +299,14 @@ CRITICAL - READ-ONLY MODE:
         : '• No suppliers added yet';
       
       // Check for expiring products
+      const now = new Date();
       const expiringProducts = this.getExpiringProducts(products);
+      const expiredProducts = products.filter(p => p.expiryDate && new Date(p.expiryDate) < now);
       const expiryInfo = expiringProducts.length > 0 
         ? `\n⚠️ Expiring Soon: ${expiringProducts.slice(0, 3).map(p => `${p.name} (${p.expiryDate})`).join(', ')}`
+        : '';
+      const expiredInfo = expiredProducts.length > 0
+        ? `\n🔴 EXPIRED: ${expiredProducts.slice(0, 3).map(p => `${p.name} (expired ${p.expiryDate})`).join(', ')}`
         : '';
       
       return `📊 BUSINESS OVERVIEW (${settings.businessName || 'Your Business'}):
@@ -275,7 +317,7 @@ Inventory Value: ₹${this.calculateInventoryValue(products)}
 📦 STOCK STATUS:
 Low Stock (≤5): ${this.getLowStockItems(products).length} items
 Out of Stock: ${this.getOutOfStockItems(products).length} items
-Top Products: ${this.getTopProducts(products).join(', ')}${expiryInfo}
+Top Products: ${this.getTopProducts(products).join(', ')}${expiredInfo}${expiryInfo}
 
 👥 SUPPLIERS (${suppliers.length} total):
 ${supplierInfo}
@@ -483,10 +525,382 @@ High Margin Items: ${this.getHighMarginProducts(products).join(', ')}`;
 
   resetChat(): void {
     this.chatHistory = [];
+    this.conversationSummary = '';
+    this.trackedEntities.clear();
   }
 
   getChatHistory(): ChatMessage[] {
     return [...this.chatHistory];
+  }
+
+  // ==================== EMBEDDINGS API ====================
+  async generateEmbedding(text: string): Promise<number[]> {
+    if (!this.isConfigured()) {
+      throw new Error('Gemini API key not configured');
+    }
+
+    try {
+      const response = await fetch(`${this.embeddingUrl}?key=${this.apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'models/text-embedding-004',
+          content: { parts: [{ text }] }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Embedding API failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.embedding.values;
+    } catch (error) {
+      console.error('Embedding generation failed:', error);
+      throw error;
+    }
+  }
+
+  async batchGenerateEmbeddings(texts: string[]): Promise<number[][]> {
+    const embeddings: number[][] = [];
+    
+    // Process in batches of 10 to avoid rate limits
+    for (let i = 0; i < texts.length; i += 10) {
+      const batch = texts.slice(i, i + 10);
+      const batchResults = await Promise.all(
+        batch.map(text => this.generateEmbedding(text))
+      );
+      embeddings.push(...batchResults);
+      
+      // Small delay between batches
+      if (i + 10 < texts.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+    
+    return embeddings;
+  }
+
+  // ==================== CONVERSATION MEMORY ====================
+  private async maintainConversationMemory(): Promise<void> {
+    if (this.chatHistory.length > 20) {
+      console.log('🧠 Maintaining conversation memory...');
+      
+      // Summarize old messages
+      const oldMessages = this.chatHistory.slice(0, 10);
+      const conversationText = oldMessages
+        .map(m => `${m.role}: ${m.content}`)
+        .join('\n');
+      
+      try {
+        const summaryPrompt = `Summarize this conversation in 2-3 sentences, focusing on:
+- Key products/suppliers discussed
+- Important decisions or insights
+- Ongoing concerns or questions
+
+Conversation:
+${conversationText}`;
+
+        const summary = await this.sendMessage(summaryPrompt);
+        this.conversationSummary = summary;
+        
+        // Keep summary + recent messages
+        this.chatHistory = this.chatHistory.slice(10);
+        console.log('✅ Conversation memory updated');
+      } catch (error) {
+        console.warn('Failed to summarize conversation:', error);
+      }
+    }
+  }
+
+  private trackEntities(message: string): void {
+    // Extract and track important entities
+    const productMatch = message.match(/(?:product|item)\s+(?:named|called)?\s*["']?([^"',.]+)["']?/i);
+    if (productMatch) {
+      this.trackedEntities.set('lastProduct', productMatch[1].trim());
+    }
+
+    const supplierMatch = message.match(/(?:supplier|vendor)\s+(?:named|called)?\s*["']?([^"',.]+)["']?/i);
+    if (supplierMatch) {
+      this.trackedEntities.set('lastSupplier', supplierMatch[1].trim());
+    }
+
+    const priceMatch = message.match(/(?:price|cost|₹)\s*(\d+(?:,\d{3})*(?:\.\d{2})?)/i);
+    if (priceMatch) {
+      this.trackedEntities.set('lastPrice', priceMatch[1]);
+    }
+  }
+
+  private getTrackedContext(): string {
+    if (this.trackedEntities.size === 0) return '';
+    
+    const context: string[] = ['TRACKED ENTITIES:'];
+    this.trackedEntities.forEach((value, key) => {
+      context.push(`• ${key}: ${value}`);
+    });
+    
+    return context.join('\n');
+  }
+
+  // ==================== INPUT SANITIZATION ====================
+  private sanitizeInput(input: string): string {
+    // Remove potentially harmful patterns
+    let sanitized = input
+      .replace(/system:/gi, '')
+      .replace(/ignore\s+previous/gi, '')
+      .replace(/forget\s+all/gi, '')
+      .replace(/<script>/gi, '')
+      .replace(/javascript:/gi, '');
+    
+    // Limit length
+    sanitized = sanitized.substring(0, 2000);
+    
+    return sanitized.trim();
+  }
+
+  // ==================== RESPONSE VALIDATION ====================
+  private validateResponse(response: string): { isValid: boolean; confidence: number; issues: string[] } {
+    const issues: string[] = [];
+    let confidence = 1.0;
+
+    // Check for hallucinations
+    if (response.match(/I don't have|I cannot|I'm not sure|uncertain/i)) {
+      confidence *= 0.7;
+      issues.push('Low confidence response');
+    }
+
+    // Check for contradictions
+    if (response.match(/however|but|although/gi)?.length || 0 > 3) {
+      confidence *= 0.85;
+      issues.push('Contains contradictions');
+    }
+
+    // Check length
+    if (response.length < 20) {
+      confidence *= 0.6;
+      issues.push('Response too short');
+    }
+
+    // Check for proper formatting
+    if (!response.match(/[.!?]$/)) {
+      confidence *= 0.9;
+      issues.push('Incomplete sentence');
+    }
+
+    return {
+      isValid: confidence > 0.5,
+      confidence,
+      issues
+    };
+  }
+
+  // ==================== PROACTIVE INSIGHTS ====================
+  async generateDailyBriefing(): Promise<string> {
+    console.log('📊 Generating daily briefing...');
+    
+    try {
+      const analytics = await analyticsCacheService.forceRefresh();
+      const todaySales = await dbService.getTodaysSalesTotal();
+      const products = await dbService.getProducts();
+      const expiringProducts = this.getExpiringProducts(products);
+      
+      // Check for expired products
+      const now = new Date();
+      const expiredProducts = products.filter(p => p.expiryDate && new Date(p.expiryDate) < now);
+      
+      // Get yesterday's data for comparison
+      const yesterdaySales = await dbService.getYesterdaySalesTotal();
+      const trend = todaySales.totalAmount > yesterdaySales.totalAmount ? '📈 Up' : 
+                    todaySales.totalAmount < yesterdaySales.totalAmount ? '📉 Down' : '➡️ Flat';
+
+      // Identify urgent actions
+      const urgentActions: string[] = [];
+      if (expiredProducts.length > 0) {
+        urgentActions.push(`🔴 URGENT: ${expiredProducts.length} expired products - remove immediately`);
+      }
+      if (analytics.outOfStockCount > 0) {
+        urgentActions.push(`Restock ${analytics.outOfStockCount} out-of-stock items`);
+      }
+      if (analytics.lowStockCount > 3) {
+        urgentActions.push(`Check ${analytics.lowStockCount} low-stock items`);
+      }
+      if (expiringProducts.length > 0) {
+        urgentActions.push(`⚠️ ${expiringProducts.length} products expiring within 30 days`);
+      }
+
+      const briefing = `🌅 Good morning! Here's your business snapshot:
+
+🎯 PRIORITY ACTIONS TODAY:
+${urgentActions.length > 0 ? urgentActions.map((a, i) => `${i + 1}. ${a}`).join('\n') : '✅ All clear - no urgent actions needed'}
+
+📊 YESTERDAY'S PERFORMANCE:
+Sales: ₹${yesterdaySales.totalAmount.toLocaleString()} from ${yesterdaySales.totalItems} items ${trend}
+
+📦 INVENTORY STATUS:
+• Total Products: ${analytics.totalProducts}
+• Stock Health: ${analytics.stockHealth}
+• Low Stock: ${analytics.lowStockCount} items
+• Out of Stock: ${analytics.outOfStockCount} items
+
+💡 TOP OPPORTUNITY:
+${this.getTopOpportunity(analytics, products)}
+
+What would you like to focus on today?`;
+
+      return briefing;
+    } catch (error) {
+      console.error('Failed to generate briefing:', error);
+      return 'Unable to generate daily briefing. Please check your inventory data.';
+    }
+  }
+
+  private getTopOpportunity(analytics: any, products: Product[]): string {
+    // Find best opportunity
+    if (analytics.highMarginProducts.length > 0) {
+      return `Promote high-margin products: ${analytics.highMarginProducts.slice(0, 2).join(', ')}`;
+    }
+    
+    if (products.length > 0) {
+      const fastMoving = products
+        .filter(p => p.quantity > 20)
+        .sort((a, b) => b.sellingPrice - a.sellingPrice)
+        .slice(0, 2)
+        .map(p => p.name);
+      
+      if (fastMoving.length > 0) {
+        return `Focus on selling: ${fastMoving.join(', ')}`;
+      }
+    }
+    
+    return 'Review pricing strategy to optimize margins';
+  }
+
+  // ==================== IMAGE ANALYSIS ====================
+  async analyzeProductImage(imageBase64: string, mimeType: string = 'image/jpeg'): Promise<string> {
+    if (!this.isConfigured()) {
+      throw new Error('Gemini API key not configured');
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}?key=${this.apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { 
+                text: `Analyze this product image and provide:
+1. Product name/description
+2. Estimated category
+3. Visual condition (new/used/damaged)
+4. Estimated price range in INR
+5. Key features visible
+
+Format as JSON:
+{
+  "name": "...",
+  "category": "...",
+  "condition": "...",
+  "estimatedPrice": "₹X - ₹Y",
+  "features": ["...", "..."]
+}` 
+              },
+              { 
+                inline_data: { 
+                  mime_type: mimeType, 
+                  data: imageBase64 
+                } 
+              }
+            ]
+          }],
+          generationConfig: {
+            temperature: 0.4,
+            maxOutputTokens: 500
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Image analysis failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const result = data.candidates[0].content.parts[0].text;
+      
+      // Try to parse JSON, fallback to raw text
+      try {
+        const jsonMatch = result.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0]);
+        }
+      } catch (e) {
+        console.warn('Could not parse JSON response');
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Image analysis error:', error);
+      throw error;
+    }
+  }
+
+  // ==================== DEMAND FORECASTING ====================
+  async forecastDemand(productId: string, days: number = 30): Promise<any> {
+    try {
+      const salesHistory = await dbService.getProductSalesHistory(productId);
+      
+      if (salesHistory.length < 7) {
+        return {
+          forecast: [],
+          confidence: 0.3,
+          insights: 'Insufficient data for accurate forecasting. Need at least 7 days of sales history.',
+          recommendation: 'Continue monitoring sales patterns'
+        };
+      }
+
+      const prompt = `Analyze this sales data and predict demand for the next ${days} days:
+
+Sales History (last 30 days):
+${JSON.stringify(salesHistory.slice(0, 30))}
+
+Consider:
+1. Trends (increasing, decreasing, stable)
+2. Seasonality patterns
+3. Day-of-week variations
+4. Recent changes
+
+Provide forecast as JSON:
+{
+  "averageDailyDemand": number,
+  "peakDays": ["Monday", "Friday"],
+  "trend": "increasing|stable|decreasing",
+  "confidence": 0.0-1.0,
+  "insights": "brief analysis",
+  "recommendedReorderQuantity": number,
+  "recommendedReorderDate": "YYYY-MM-DD"
+}`;
+
+      const response = await this.sendMessage(prompt);
+      
+      try {
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0]);
+        }
+      } catch (e) {
+        console.warn('Could not parse forecast JSON');
+      }
+      
+      return {
+        forecast: [],
+        confidence: 0.5,
+        insights: response,
+        recommendation: 'Manual review recommended'
+      };
+    } catch (error) {
+      console.error('Forecast error:', error);
+      throw error;
+    }
   }
 
   private getRecentChatContext(): string {

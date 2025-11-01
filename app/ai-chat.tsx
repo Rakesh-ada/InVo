@@ -7,7 +7,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -16,8 +18,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 
 export default function AIChatScreen() {
   const router = useRouter();
@@ -31,17 +33,28 @@ export default function AIChatScreen() {
   const [streamingMessage, setStreamingMessage] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const cancelReplyRef = useRef(false);
+  const messageIdCounter = useRef(0);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
-  const renderInlineSegments = (text: string) => {
+  // Generate unique message ID
+  const generateMessageId = () => {
+    messageIdCounter.current += 1;
+    return `${Date.now()}-${messageIdCounter.current}`;
+  };
+
+  const renderInlineSegments = (text: string, lineKey: string = '') => {
     const segments: React.ReactNode[] = [];
     const regex = /\*(.+?)\*|\*(.+?)\*/g; // *bold* or italic
     let lastIndex = 0;
     let match: RegExpExecArray | null;
+    let segmentCount = 0;
 
     while ((match = regex.exec(text)) !== null) {
       if (match.index > lastIndex) {
         segments.push(
-          <Text key={`t-${lastIndex}`} style={styles.messageText}>
+          <Text key={`${lineKey}-t-${segmentCount++}`} style={styles.messageText}>
             {text.slice(lastIndex, match.index)}
           </Text>
         );
@@ -50,13 +63,13 @@ export default function AIChatScreen() {
       const italic = match[2];
       if (bold) {
         segments.push(
-          <Text key={`b-${match.index}`} style={[styles.messageText, { fontWeight: '700' }]}>
+          <Text key={`${lineKey}-b-${segmentCount++}`} style={[styles.messageText, { fontWeight: '700' }]}>
             {bold}
           </Text>
         );
       } else if (italic) {
         segments.push(
-          <Text key={`i-${match.index}`} style={[styles.messageText, { fontStyle: 'italic' }]}>
+          <Text key={`${lineKey}-i-${segmentCount++}`} style={[styles.messageText, { fontStyle: 'italic' }]}>
             {italic}
           </Text>
         );
@@ -66,7 +79,7 @@ export default function AIChatScreen() {
 
     if (lastIndex < text.length) {
       segments.push(
-        <Text key={`t-${lastIndex}-end`} style={styles.messageText}>
+        <Text key={`${lineKey}-t-${segmentCount++}-end`} style={styles.messageText}>
           {text.slice(lastIndex)}
         </Text>
       );
@@ -86,7 +99,7 @@ export default function AIChatScreen() {
             return (
               <View key={`ul-${index}`} style={styles.listRow}>
                 <Text style={styles.bullet}>{'\u2022'}</Text>
-                <Text style={styles.messageText}>{renderInlineSegments(ulMatch[1])}</Text>
+                <Text style={styles.messageText}>{renderInlineSegments(ulMatch[1], `ul-${index}`)}</Text>
               </View>
             );
           }
@@ -96,7 +109,7 @@ export default function AIChatScreen() {
             return (
               <View key={`ol-${index}`} style={styles.listRow}>
                 <Text style={styles.numberBullet}>{`${olMatch[1]}.`}</Text>
-                <Text style={styles.messageText}>{renderInlineSegments(olMatch[2])}</Text>
+                <Text style={styles.messageText}>{renderInlineSegments(olMatch[2], `ol-${index}`)}</Text>
               </View>
             );
           }
@@ -107,7 +120,7 @@ export default function AIChatScreen() {
           // paragraph
           return (
             <Text key={`p-${index}`} style={styles.messageText}>
-              {renderInlineSegments(line)}
+              {renderInlineSegments(line, `p-${index}`)}
             </Text>
           );
         })}
@@ -122,9 +135,10 @@ const initializeChat = useCallback(async () => {
       if (!geminiService.isConfigured()) {
         Alert.alert(
           'API Key Required',
-          'Please add your Gemini API key to the .env file to use InVo AI.\n\nAdd this line:\nEXPO_PUBLIC_GEMINI_API_KEY=your_api_key_here',
-          [{ text: 'OK', onPress: () => router.back() }]
+          'Please configure your Gemini API key using the settings icon to use InVo AI.',
+          [{ text: 'OK' }]
         );
+        setIsInitializing(false);
         return;
       }
 
@@ -132,15 +146,15 @@ const initializeChat = useCallback(async () => {
       
       // Add welcome message
       const welcomeMessage: ChatMessage = {
-        id: Date.now().toString(),
+        id: generateMessageId(),
         role: 'assistant',
-        content: `Hi! I'm InVo AI — your inventory assistant.
+        content: `Hi! I'm InVo AI — your inventory assistant!
 
-I can help with:
+I can help you with:
 • Inventory status and stock alerts
 • Sales trends and best sellers
 • Supplier info and ordering tips
-• Business insights and pricing
+• Business insights and pricing strategies
 
 What would you like to know today?`,
         timestamp: new Date(),
@@ -154,7 +168,7 @@ What would you like to know today?`,
         'Unable to start AI chat. Please check your internet connection and API key.',
         [
           { text: 'Retry', onPress: () => initializeChat() },
-          { text: 'Go Back', onPress: () => router.back(), style: 'cancel' }
+          { text: 'Cancel', style: 'cancel' }
         ]
       );
     } finally {
@@ -166,17 +180,75 @@ What would you like to know today?`,
     initializeChat();
   }, [initializeChat]);
 
+  // Keyboard visibility listener
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setIsKeyboardVisible(true)
+    );
+    const keyboardWillHide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setIsKeyboardVisible(false)
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
+    };
+  }, []);
+
+  const handleSpecialCommand = async (command: string): Promise<string | null> => {
+    const lowerCommand = command.toLowerCase();
+    
+    // Daily briefing
+    if (lowerCommand.includes('daily briefing') || lowerCommand.includes('morning report')) {
+      return await geminiService.generateDailyBriefing();
+    }
+    
+    // Inventory optimization
+    if (lowerCommand.includes('optimize inventory') || lowerCommand.includes('optimize stock')) {
+      const { inventoryOptimizationAgent } = await import('@/services/inventory-optimization-agent');
+      const plan = await inventoryOptimizationAgent.optimizeStock();
+      
+      return `🤖 INVENTORY OPTIMIZATION ANALYSIS
+
+📦 REORDER RECOMMENDATIONS (${plan.toReorder.length}):
+${plan.toReorder.slice(0, 5).map((r, i) => 
+  `${i + 1}. ${r.product.name}: Order ${r.suggestedQuantity} units (${r.priority.toUpperCase()})
+   → ${r.reason}`
+).join('\n')}
+
+🏷️ DISCOUNT OPPORTUNITIES (${plan.toDiscount.length}):
+${plan.toDiscount.slice(0, 3).map((d, i) => 
+  `${i + 1}. ${d.product.name}: Suggest ${d.suggestedDiscount}% discount
+   → ${d.reason}`
+).join('\n')}
+
+💡 KEY RECOMMENDATIONS:
+${plan.recommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
+
+💰 FINANCIAL IMPACT:
+• Potential Revenue: ₹${Math.round(plan.estimatedRevenue).toLocaleString()}
+• Estimated Savings: ₹${Math.round(plan.estimatedSavings).toLocaleString()}
+
+Would you like details on any specific item?`;
+    }
+    
+    return null;
+  };
+
   const sendMessage = async () => {
     if (!inputText.trim() || isLoading || isStreaming) return;
 
     const userMessage: ChatMessage = {
-      id: Date.now().toString(),
+      id: generateMessageId(),
       role: 'user',
       content: inputText.trim(),
       timestamp: new Date(),
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const messageContent = inputText.trim();
     setInputText('');
     setIsLoading(true);
     setIsStreaming(true);
@@ -191,9 +263,29 @@ What would you like to know today?`,
     try {
       console.log('Sending message to AI (streaming):', userMessage.content);
       
+      // Check for special commands
+      const specialResponse = await handleSpecialCommand(messageContent);
+      if (specialResponse) {
+        const assistantMessage: ChatMessage = {
+          id: generateMessageId(),
+          role: 'assistant',
+          content: specialResponse,
+          timestamp: new Date(),
+        };
+
+        setMessages(prev => [...prev, assistantMessage]);
+        setIsStreaming(false);
+        setIsLoading(false);
+
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 200);
+        return;
+      }
+      
       // Use streaming API
       await geminiService.sendMessageStream(
-        userMessage.content,
+        messageContent,
         (chunk) => {
           // On each chunk received
           if (!cancelReplyRef.current) {
@@ -211,7 +303,7 @@ What would you like to know today?`,
           }
 
           const assistantMessage: ChatMessage = {
-            id: (Date.now() + 1).toString(),
+            id: generateMessageId(),
             role: 'assistant',
             content: fullResponse,
             timestamp: new Date(),
@@ -232,7 +324,7 @@ What would you like to know today?`,
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           
           const errorChatMessage: ChatMessage = {
-            id: (Date.now() + 1).toString(),
+            id: generateMessageId(),
             role: 'assistant',
             content: `❌ Sorry, I encountered an error: ${errorMessage}\n\nPlease try again or check your API configuration.`,
             timestamp: new Date(),
@@ -248,6 +340,37 @@ What would you like to know today?`,
       setStreamingMessage('');
       setIsStreaming(false);
       setIsLoading(false);
+    }
+  };
+
+  const handleSaveApiKey = async () => {
+    const trimmedKey = apiKeyInput.trim();
+    if (!trimmedKey) {
+      Alert.alert('Validation', 'Please enter your Gemini API key.');
+      return;
+    }
+
+    try {
+      // Update the API key in gemini service
+      geminiService.updateApiKey(trimmedKey);
+      
+      setIsApiKeyModalOpen(false);
+      setApiKeyInput('');
+      
+      Alert.alert('Success', 'API key updated successfully! You can now use InVo AI.', [
+        {
+          text: 'OK',
+          onPress: () => {
+            // Reinitialize chat with new API key
+            geminiService.resetChat();
+            setMessages([]);
+            initializeChat();
+          }
+        }
+      ]);
+    } catch (error) {
+      console.error('Failed to update API key:', error);
+      Alert.alert('Error', 'Failed to update API key. Please try again.');
     }
   };
 
@@ -274,10 +397,10 @@ What would you like to know today?`,
   }
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: bg }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: bg }]} edges={['top', 'bottom']}>
       <KeyboardAvoidingView 
         style={styles.container} 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         {/* Header */}
@@ -292,28 +415,11 @@ What would you like to know today?`,
           </View>
           <View style={styles.headerRight}>
             <TouchableOpacity 
-              onPress={() => {
-                Alert.alert(
-                  'Reset Chat',
-                  'Start a new conversation? This will clear the current chat history.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    { 
-                      text: 'Reset', 
-                      style: 'destructive',
-                      onPress: () => {
-                        geminiService.resetChat();
-                        setMessages([]);
-                        initializeChat();
-                      }
-                    }
-                  ]
-                );
-              }} 
+              onPress={() => setIsApiKeyModalOpen(true)} 
               style={styles.headerIconButton}
             >
               <Svg width={22} height={22} viewBox="0 0 24 24" fill="#E5E7EB">
-                <Path d="M22 12C22 17.5228 17.5229 22 12 22C6.4772 22 2 17.5228 2 12C2 6.47715 6.4772 2 12 2V4C7.5817 4 4 7.58172 4 12C4 16.4183 7.5817 20 12 20C16.4183 20 20 16.4183 20 12C20 9.25022 18.6127 6.82447 16.4998 5.38451L16.5 8H14.5V2L20.5 2V4L18.0008 3.99989C20.4293 5.82434 22 8.72873 22 12Z" />
+                <Path d="M22 12H20V5H4V18.3851L5.76282 17H12V19H6.45455L2 22.5V4C2 3.44772 2.44772 3 3 3H21C21.5523 3 22 3.44772 22 4V12ZM14.145 19.071C14.0505 18.7301 14 18.371 14 18C14 17.629 14.0505 17.2699 14.145 16.929L13.1699 16.366L14.1699 14.634L15.1459 15.1975C15.6475 14.6867 16.2851 14.31 17 14.126V13H19V14.126C19.7149 14.31 20.3525 14.6867 20.8541 15.1975L21.8301 14.634L22.8301 16.366L21.855 16.929C21.9495 17.2699 22 17.629 22 18C22 18.371 21.9495 18.7301 21.855 19.071L22.8301 19.634L21.8301 21.366L20.8541 20.8025C20.3525 21.3133 19.7149 21.69 19 21.874V23H17V21.874C16.2851 21.69 15.6475 21.3133 15.1459 20.8025L14.1699 21.366L13.1699 19.634L14.145 19.071ZM18 20C19.1046 20 20 19.1046 20 18C20 16.8954 19.1046 16 18 16C16.8954 16 16 16.8954 16 18C16 19.1046 16.8954 20 18 20Z" />
               </Svg>
             </TouchableOpacity>
           </View>
@@ -465,6 +571,58 @@ What would you like to know today?`,
           {/* meta row removed as per request */}
         </View>
       </KeyboardAvoidingView>
+
+      {/* API Key Modal */}
+      <Modal visible={isApiKeyModalOpen} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Svg width={32} height={32} viewBox="0 0 24 24" fill="#3B82F6">
+                <Path d="M22 12H20V5H4V18.3851L5.76282 17H12V19H6.45455L2 22.5V4C2 3.44772 2.44772 3 3 3H21C21.5523 3 22 3.44772 22 4V12ZM14.145 19.071C14.0505 18.7301 14 18.371 14 18C14 17.629 14.0505 17.2699 14.145 16.929L13.1699 16.366L14.1699 14.634L15.1459 15.1975C15.6475 14.6867 16.2851 14.31 17 14.126V13H19V14.126C19.7149 14.31 20.3525 14.6867 20.8541 15.1975L21.8301 14.634L22.8301 16.366L21.855 16.929C21.9495 17.2699 22 17.629 22 18C22 18.371 21.9495 18.7301 21.855 19.071L22.8301 19.634L21.8301 21.366L20.8541 20.8025C20.3525 21.3133 19.7149 21.69 19 21.874V23H17V21.874C16.2851 21.69 15.6475 21.3133 15.1459 20.8025L14.1699 21.366L13.1699 19.634L14.145 19.071ZM18 20C19.1046 20 20 19.1046 20 18C20 16.8954 19.1046 16 18 16C16.8954 16 16 16.8954 16 18C16 19.1046 16.8954 20 18 20Z" />
+              </Svg>
+              <ThemedText type="subtitle" style={styles.modalTitle}>Gemini API Key</ThemedText>
+            </View>
+            
+            <View style={styles.modalBody}>
+              <ThemedText style={styles.modalDescription}>
+                Enter your Google Gemini API key to enable AI features. Get your key from Google AI Studio.
+              </ThemedText>
+              
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel} darkColor="#9BA1A6">API Key</ThemedText>
+                <TextInput
+                  value={apiKeyInput}
+                  onChangeText={setApiKeyInput}
+                  placeholder="AIza..."
+                  placeholderTextColor="#6B7280"
+                  style={styles.apiKeyInput}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                />
+              </View>
+            </View>
+            
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalCancelButton]} 
+                onPress={() => {
+                  setIsApiKeyModalOpen(false);
+                  setApiKeyInput('');
+                }}
+              >
+                <ThemedText style={styles.modalCancelText}>Cancel</ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalSaveButton]} 
+                onPress={handleSaveApiKey}
+              >
+                <ThemedText style={styles.modalSaveText}>Save</ThemedText>
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -624,8 +782,8 @@ const styles = StyleSheet.create({
     // removed blue accent border
   },
   messageText: {
-    fontSize: 18,
-    lineHeight: 26,
+    fontSize: 17,
+    lineHeight: 24,
     color: '#FFFFFF',
   },
   listRow: {
@@ -718,7 +876,8 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingTop: 12,
+    paddingBottom: 0,
     backgroundColor: 'transparent',
     borderTopWidth: 1,
     borderTopColor: '#2A2A2A',
@@ -762,6 +921,90 @@ const styles = StyleSheet.create({
   sendButtonDisabled: {
     backgroundColor: '#4A5568',
     opacity: 0.6,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#1F1F1F',
+    borderRadius: 20,
+    padding: 24,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    gap: 12,
+  },
+  modalTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  modalBody: {
+    marginBottom: 24,
+  },
+  modalDescription: {
+    color: '#9BA1A6',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  inputGroup: {
+    gap: 8,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    opacity: 0.9,
+  },
+  apiKeyInput: {
+    height: 48,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#2A2A2A',
+    color: '#FFFFFF',
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: '#3A3A3A',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  modalButton: {
+    paddingHorizontal: 20,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 100,
+  },
+  modalCancelButton: {
+    backgroundColor: '#2A2A2A',
+    borderWidth: 1,
+    borderColor: '#3A3A3A',
+  },
+  modalSaveButton: {
+    backgroundColor: '#3B82F6',
+  },
+  modalCancelText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  modalSaveText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
   // input meta styles removed
 });

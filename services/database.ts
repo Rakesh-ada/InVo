@@ -1025,6 +1025,64 @@ class DatabaseService {
       return { totalAmount: 0, totalItems: 0 };
     }
   }
+
+  async getYesterdaySalesTotal(): Promise<{ totalAmount: number; totalItems: number }> {
+    await this.ensureDatabase();
+    
+    if (!this.db) {
+      throw new Error('Database not available');
+    }
+
+    try {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      
+      const result = await this.db.getFirstAsync(
+        'SELECT COALESCE(SUM(totalAmount), 0) as totalAmount, COALESCE(SUM(quantitySold), 0) as totalItems FROM sales WHERE DATE(saleDate) = ?',
+        [yesterdayStr]
+      ) as any;
+      
+      return {
+        totalAmount: result.totalAmount || 0,
+        totalItems: result.totalItems || 0
+      };
+    } catch (error) {
+      console.warn('Failed to get yesterday\'s sales total:', error);
+      return { totalAmount: 0, totalItems: 0 };
+    }
+  }
+
+  async getProductSalesHistory(productId: string, days: number = 30): Promise<any[]> {
+    await this.ensureDatabase();
+    
+    if (!this.db) {
+      throw new Error('Database not available');
+    }
+
+    try {
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      const startDateStr = startDate.toISOString().split('T')[0];
+      
+      const results = await this.db.getAllAsync(
+        `SELECT 
+          DATE(saleDate) as date,
+          SUM(quantitySold) as quantity,
+          SUM(totalAmount) as revenue
+        FROM sales 
+        WHERE productId = ? AND DATE(saleDate) >= ?
+        GROUP BY DATE(saleDate)
+        ORDER BY date DESC`,
+        [productId, startDateStr]
+      ) as any[];
+      
+      return results || [];
+    } catch (error) {
+      console.warn('Failed to get product sales history:', error);
+      return [];
+    }
+  }
 }
 
 export const dbService = new DatabaseService();

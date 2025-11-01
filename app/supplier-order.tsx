@@ -1,10 +1,10 @@
 import { ThemedText } from '@/components/themed-text';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Product as DBProduct, dbService, Supplier } from '@/services/database';
 import { CallIcon } from '@/components/ui/call-icon';
-import { WhatsAppIcon } from '@/components/ui/whatsapp-icon';
-import { SearchIcon } from '@/components/ui/search-icon';
 import { DeleteIcon } from '@/components/ui/delete-icon';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { SearchIcon } from '@/components/ui/search-icon';
+import { WhatsAppIcon } from '@/components/ui/whatsapp-icon';
+import { Product as DBProduct, dbService, Supplier } from '@/services/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -271,7 +271,7 @@ export default function SupplierOrderScreen() {
         <View style={styles.content}>
           <View style={styles.header}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <IconSymbol name="chevron.left" size={24} color="#FFFFFF" />
+              <IconSymbol name="chevron.left" size={28} color="#FFFFFF" />
             </TouchableOpacity>
             <View style={styles.headerCenter}>
               <ThemedText style={styles.supplierName}>Orders</ThemedText>
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#2A2A2A',
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },

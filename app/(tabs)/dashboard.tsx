@@ -98,17 +98,24 @@ export default function DashboardScreen() {
     return items;
   }, [salesData]);
   
-  // Calculate out of stock, low stock, and expired items
-  const outOfStockItems = products.filter(product => product.quantity === 0);
-  const lowStockItems = products.filter(product => product.quantity > 0 && product.quantity <= 5);
-  
-  // Check for expired items
+  // Check for expired items first (highest priority)
   const now = new Date();
   const expiredItems = products.filter(product => {
     if (!product.expiryDate) return false;
     const expiryDate = new Date(product.expiryDate);
     return expiryDate < now;
   });
+  
+  // Get expired product IDs for exclusion
+  const expiredIds = new Set(expiredItems.map(p => p.id));
+  
+  // Calculate out of stock and low stock items (excluding expired products)
+  const outOfStockItems = products.filter(product => 
+    !expiredIds.has(product.id) && product.quantity === 0
+  );
+  const lowStockItems = products.filter(product => 
+    !expiredIds.has(product.id) && product.quantity > 0 && product.quantity <= 5
+  );
   
   // Ignore list applies ONLY to low-stock items, not out-of-stock or expired
   const visibleOutOfStock = outOfStockItems; // never ignored

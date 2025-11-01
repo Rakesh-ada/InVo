@@ -12,6 +12,7 @@ export interface DocumentEmbedding {
   metadata: {
     type: 'product' | 'sale' | 'supplier';
     productId?: string;
+    supplierId?: string;
     name?: string;
     category?: string;
   };
@@ -176,8 +177,17 @@ Recent Activity: ${recentSales.length} recent transactions`;
   }
 
   private async generateEmbedding(text: string): Promise<number[]> {
-    // Simple embedding using character-based features
-    // For production, use Gemini's embedding API or a proper model
+    // Try Gemini embedding API first, fallback to simple embedding
+    try {
+      const { geminiService } = await import('./gemini');
+      if (geminiService.isConfigured()) {
+        return await geminiService.generateEmbedding(text);
+      }
+    } catch (error) {
+      console.warn('Gemini embedding failed, using simple embedding:', error);
+    }
+    
+    // Fallback to simple embedding
     return this.simpleTextEmbedding(text);
   }
 
@@ -267,15 +277,128 @@ Recent Activity: ${recentSales.length} recent transactions`;
     return results.slice(0, topK);
   }
 
+  // ==================== HYBRID SEARCH ====================
+  async keywordSearch(query: string, topK: number = 5): Promise<SearchResult[]> {
+    await this.initialize();
+    
+    if (this.embeddings.length === 0) {
+      return [];
+    }
+
+    const queryLower = query.toLowerCase();
+    const keywords = queryLower.split(/\s+/).filter(w => w.length > 2);
+    
+    const results = this.embeddings.map(doc => {
+      const contentLower = doc.content.toLowerCase();
+      let score = 0;
+      
+      // Exact phrase match (highest weight)
+      if (contentLower.includes(queryLower)) {
+        score += 10;
+      }
+      
+      // Keyword matches
+      keywords.forEach(keyword => {
+        const regex = new RegExp(`\\b${keyword}\\b`, 'gi');
+        const matches = (contentLower.match(regex) || []).length;
+        score += matches * 2;
+      });
+      
+      // Title/name boost
+      if (doc.metadata.name) {
+        const nameLower = doc.metadata.name.toLowerCase();
+        keywords.forEach(keyword => {
+          if (nameLower.includes(keyword)) {
+            score += 5;
+          }
+        });
+      }
+      
+      return {
+        id: doc.id,
+        content: doc.content,
+        score,
+        metadata: doc.metadata
+      };
+    });
+
+    // Filter out zero scores
+    const filtered = results.filter(r => r.score > 0);
+    filtered.sort((a, b) => b.score - a.score);
+    
+    return filtered.slice(0, topK);
+  }
+
+  async hybridSearch(query: string, topK: number = 5): Promise<SearchResult[]> {
+    console.log('🔍 Running hybrid search (semantic + keyword)...');
+    
+    // Run both searches in parallel
+    const [semanticResults, keywordResults] = await Promise.all([
+      this.semanticSearch(query, topK * 2),
+      this.keywordSearch(query, topK * 2)
+    ]);
+
+    // Merge and re-rank results
+    const merged = this.mergeAndRank(semanticResults, keywordResults, topK);
+    
+    console.log(`✅ Hybrid search returned ${merged.length} results`);
+    return merged;
+  }
+
+  private mergeAndRank(semanticResults: SearchResult[], keywordResults: SearchResult[], topK: number): SearchResult[] {
+    const scoreMap = new Map<string, { semantic: number; keyword: number; content: string; metadata: any }>();
+
+    // Collect semantic scores
+    semanticResults.forEach((result, index) => {
+      const normalizedScore = 1 - (index / semanticResults.length); // Rank-based normalization
+      scoreMap.set(result.id, {
+        semantic: normalizedScore,
+        keyword: 0,
+        content: result.content,
+        metadata: result.metadata
+      });
+    });
+
+    // Add keyword scores
+    keywordResults.forEach((result, index) => {
+      const normalizedScore = 1 - (index / keywordResults.length);
+      const existing = scoreMap.get(result.id);
+      if (existing) {
+        existing.keyword = normalizedScore;
+      } else {
+        scoreMap.set(result.id, {
+          semantic: 0,
+          keyword: normalizedScore,
+          content: result.content,
+          metadata: result.metadata
+        });
+      }
+    });
+
+    // Calculate combined scores (weighted: semantic 60%, keyword 40%)
+    const combined = Array.from(scoreMap.entries()).map(([id, scores]) => ({
+      id,
+      content: scores.content,
+      score: (scores.semantic * 0.6) + (scores.keyword * 0.4),
+      metadata: scores.metadata
+    }));
+
+    // Sort by combined score
+    combined.sort((a, b) => b.score - a.score);
+    
+    return combined.slice(0, topK);
+  }
+
   async getRelevantContext(query: string, maxResults: number = 3): Promise<string> {
-    const results = await this.semanticSearch(query, maxResults);
+    // Use hybrid search for better results
+    const results = await this.hybridSearch(query, maxResults);
     
     if (results.length === 0) {
       return 'No relevant context found.';
     }
 
     return results
-      .map((result, idx) => `[${idx + 1}] ${result.content}`)
+      .map((result, idx) => `[${idx + 1}] (Score: ${result.score.toFixed(2)}) ${result.content}`)
       .join('\n\n');
   }
 

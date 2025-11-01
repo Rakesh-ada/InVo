@@ -9,12 +9,12 @@ import { ActivityIndicator, Alert, Image, StyleSheet, TextInput, TouchableOpacit
 import { SafeAreaView } from 'react-native-safe-area-context';
 // import * as FileSystem from 'expo-file-system';
 // import * * Sharing from 'expo-sharing';
-import * as ImagePicker from 'expo-image-picker';
-import { QRIcon } from '@/components/ui/qr-icon';
-import { BusinessIcon } from '@/components/ui/business-icon';
-import { ReportIcon } from '@/components/ui/report-icon';
 import { AIIcon } from '@/components/ui/ai-icon';
+import { BusinessIcon } from '@/components/ui/business-icon';
+import { QRIcon } from '@/components/ui/qr-icon';
+import { ReportIcon } from '@/components/ui/report-icon';
 import { SupplierIcon } from '@/components/ui/supplier-icon';
+import * as ImagePicker from 'expo-image-picker';
 
 type SettingsData = {
   profileName: string;
@@ -253,7 +253,7 @@ export default function SettingsScreen() {
 
         {/* Business Settings */}
         <View style={styles.section}>
-          <View style={styles.settingCard}>
+          <View style={styles.settingCardWithSpacing}>
             <View style={styles.settingRow}>
               <View style={styles.settingLeft}>
                 <BusinessIcon size={20} color="#FFFFFF" />
@@ -268,11 +268,8 @@ export default function SettingsScreen() {
               />
             </View>
           </View>
-        </View>
 
-        {/* Business QR */}
-        <View style={styles.section}>
-          <View style={styles.settingCard}>
+          <View style={styles.settingCardWithSpacing}>
             <View style={styles.settingRow}>
               <View style={styles.settingLeft}>
                 <QRIcon size={20} color="#FFFFFF" />
@@ -298,10 +295,7 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
 
-        {/* Additional Features */}
-        <View style={styles.section}>
           <View style={styles.settingCardWithSpacing}>
             <TouchableOpacity 
               style={styles.settingRow} 
@@ -330,7 +324,7 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.settingCard}>
+          <View style={styles.settingCardWithSpacing}>
             <TouchableOpacity 
               style={styles.settingRow} 
               activeOpacity={0.7}

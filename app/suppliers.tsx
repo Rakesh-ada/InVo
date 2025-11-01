@@ -1,6 +1,6 @@
 import { ThemedText } from '@/components/themed-text';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ArrowRightIcon } from '@/components/ui/arrow-right-icon';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 // eslint-disable-next-line import/namespace
 import { dbService, Supplier } from '@/services/database';
@@ -218,7 +218,7 @@ export default function SuppliersScreen() {
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={handleBackPress} style={styles.backIconButton}>
-            <IconSymbol name="chevron.left" size={20} color="white" />
+            <IconSymbol name="chevron.left" size={28} color="white" />
           </TouchableOpacity>
           <View style={styles.titleContainer}>
             <ThemedText type="title">Suppliers</ThemedText>
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#2A2A2A',
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -365,9 +365,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 12,
     zIndex: 1,
-    padding: 8,
-    backgroundColor: '#2A2A2A',
+    width: 40,
+    height: 40,
+    backgroundColor: 'transparent',
     borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   listWrap: {
     flex: 1,
